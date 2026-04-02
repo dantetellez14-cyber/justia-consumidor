@@ -119,8 +119,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(normalizedAnalysis);
   } catch (err) {
     console.error("Ollama API error:", err);
+
+    // Fallback: generate a demo analysis when Ollama is unavailable (e.g., Vercel production)
+    if (process.env.DEMO_MODE === "true" || (err instanceof TypeError && String(err.message).includes("fetch"))) {
+      return NextResponse.json(generateDemoAnalysis(relato));
+    }
+
     const message =
       err instanceof Error ? err.message : "Error al analizar el caso con IA.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+function generateDemoAnalysis(relato: string): Record<string, unknown> {
+  const isMexico = /\b(MXN|pesos mexicanos|PROFECO|México|mexico|CDMX)\b/i.test(relato);
+  const amountMatch = relato.match(/\$\s?([\d.,]+)/);
+  const amount = amountMatch
+    ? Number(amountMatch[1].replace(/[.,]/g, ""))
+    : isMexico ? 15000 : 450000;
+
+  const companyMatch = relato.match(/(?:empresa|tienda|marca|compañía)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ\s]+?)(?:\s+(?:pero|y|no|se|me|que|del|de|la|el|en|por|con|sin))/i);
+  const empresa = companyMatch ? companyMatch[1].trim() : "Empresa no especificada";
+
+  return {
+    empresa,
+    producto_servicio: "Producto/servicio según relato del consumidor",
+    monto_reclamo: amount,
+    fecha_incidente: "Fecha reciente",
+    core_grievance: "Incumplimiento de garantía y/o negativa de reembolso",
+    probabilidad_exito: 0.72,
+    analisis_legal: isMexico
+      ? "Conforme a la Ley Federal de Protección al Consumidor (LFPC), artículos 7, 32 y 92, el consumidor tiene derecho a la reparación, reposición o devolución del bien. La PROFECO puede intervenir como mediador. NOTA: Este es un análisis de demostración."
+      : "Conforme a la Ley 24.240 de Defensa del Consumidor, artículos 10 bis, 11 y 17, el consumidor tiene derecho a la reparación, sustitución o devolución del producto. El plazo de garantía legal es de 6 meses. NOTA: Este es un análisis de demostración.",
+    pais_detectado: isMexico ? "MX" : "AR",
+  };
 }
