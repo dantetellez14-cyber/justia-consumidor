@@ -363,6 +363,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl">
             <ComplaintGenerator
               analysis={analysis}
+              caseId={caseId}
               onNext={() => {
                 markCompleted("complaint");
                 if (caseId) {

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { CaseAnalysis } from "@/lib/types";
-import { FileText, Download, Mail, Save, Pencil } from "lucide-react";
+import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
   readonly analysis: CaseAnalysis;
+  readonly caseId: string | null;
   readonly onNext: () => void;
 }
 
@@ -68,10 +69,13 @@ Domicilio: [Completar]
 Teléfono: [Completar]`;
 }
 
-export function ComplaintGenerator({ analysis, onNext }: Props) {
+export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
+  const [empresaEmail, setEmpresaEmail] = useState("");
   const [saved, setSaved] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const complaintText = generateComplaintText(analysis, nombre, email);
 
@@ -99,6 +103,36 @@ export function ComplaintGenerator({ analysis, onNext }: Props) {
     );
     const body = encodeURIComponent(complaintText);
     window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
+
+  const handleSendViaResend = async () => {
+    if (!nombre.trim() || !email.trim() || !empresaEmail.trim()) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await fetch("/api/send-complaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis,
+          nombre,
+          email,
+          empresaEmail,
+          complaintText,
+          caseId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSendResult({ success: false, message: data.error });
+      } else {
+        setSendResult({ success: true, message: data.message });
+      }
+    } catch {
+      setSendResult({ success: false, message: "Error de conexion. Intenta de nuevo." });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -156,6 +190,26 @@ export function ComplaintGenerator({ analysis, onNext }: Props) {
           </div>
         </div>
 
+        {/* Company email field */}
+        <div className="mb-4">
+          <label className="mb-1 block text-xs font-medium text-slate-500">
+            Email de la empresa (para enviar el reclamo directamente)
+          </label>
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <Building2 className="h-4 w-4 text-slate-400" />
+            <input
+              type="email"
+              value={empresaEmail}
+              onChange={(e) => setEmpresaEmail(e.target.value)}
+              placeholder={`atencion@${analysis.empresa.toLowerCase().replace(/\s+/g, "")}.com`}
+              className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Opcional. Si lo completas, podemos enviar el reclamo directamente a la empresa.
+          </p>
+        </div>
+
         {/* Preview */}
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-600">
@@ -165,6 +219,22 @@ export function ComplaintGenerator({ analysis, onNext }: Props) {
 
         {/* Actions */}
         <div className="mt-4 flex flex-wrap gap-3">
+          {empresaEmail.trim() && nombre.trim() && email.trim() && (
+            <button
+              onClick={handleSendViaResend}
+              disabled={sending || sendResult?.success === true}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
+            >
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : sendResult?.success ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              {sending ? "Enviando..." : sendResult?.success ? "Enviado" : "Enviar a la empresa"}
+            </button>
+          )}
           <button
             onClick={handleDownload}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg"
@@ -177,7 +247,7 @@ export function ComplaintGenerator({ analysis, onNext }: Props) {
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Mail className="h-4 w-4" />
-            Enviar por Email
+            Abrir en Email
           </button>
           <button
             onClick={handleCopy}
@@ -187,6 +257,26 @@ export function ComplaintGenerator({ analysis, onNext }: Props) {
             {saved ? "Copiado!" : "Copiar Texto"}
           </button>
         </div>
+
+        {/* Send result feedback */}
+        {sendResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-3 flex items-center gap-2 rounded-lg border p-3 text-sm ${
+              sendResult.success
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {sendResult.success ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0" />
+            )}
+            {sendResult.message}
+          </motion.div>
+        )}
       </div>
 
       <button
