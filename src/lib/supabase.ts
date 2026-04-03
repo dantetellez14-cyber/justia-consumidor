@@ -14,6 +14,7 @@ export type CaseStatus =
 
 export interface CaseRecord {
   id: string;
+  user_id: string | null;
   relato: string;
   empresa: string | null;
   producto_servicio: string | null;
@@ -32,6 +33,7 @@ export interface CaseRecord {
 
 export interface FeedbackRecord {
   id: string;
+  user_id: string | null;
   case_id: string | null;
   rating: number;
   comment: string | null;

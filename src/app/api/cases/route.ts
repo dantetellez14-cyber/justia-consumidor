@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { supabase } from "@/lib/supabase";
 
 // POST: Create a new case after AI analysis
 export async function POST(request: NextRequest) {
+  const { userId } = await auth();
   const body = await request.json();
 
   const { data, error } = await supabase
@@ -18,6 +20,7 @@ export async function POST(request: NextRequest) {
       analisis_legal: body.analisis_legal,
       pais_detectado: body.pais_detectado,
       status: "consulta_recibida",
+      user_id: userId,
     })
     .select()
     .single();
@@ -29,25 +32,42 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(data);
 }
 
-// GET: Retrieve a case by id (via query param)
+// GET: Retrieve a single case by id, or list all cases for the current user
 export async function GET(request: NextRequest) {
+  const { userId } = await auth();
   const caseId = request.nextUrl.searchParams.get("id");
 
-  if (!caseId) {
+  // Single case lookup
+  if (caseId) {
+    const { data, error } = await supabase
+      .from("cases")
+      .select()
+      .eq("id", caseId)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+
+    return NextResponse.json(data);
+  }
+
+  // List all cases for the authenticated user
+  if (!userId) {
     return NextResponse.json(
-      { error: "Case ID is required" },
-      { status: 400 }
+      { error: "Debes iniciar sesión para ver tus casos." },
+      { status: 401 }
     );
   }
 
   const { data, error } = await supabase
     .from("cases")
     .select()
-    .eq("id", caseId)
-    .single();
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 404 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json(data);

@@ -2,6 +2,7 @@
 
 import { Scale, Shield, Clock, FileText, Users, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 
 interface Props {
   readonly onStart: () => void;
@@ -38,15 +39,38 @@ const steps = [
 ];
 
 export function WelcomeHero({ onStart }: Props) {
+  const { isSignedIn } = useAuth();
+
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-b from-slate-50 to-white">
       {/* Header */}
       <header className="border-b border-slate-100 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-4">
-          <div className="rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-2.5">
-            <Scale className="h-6 w-6 text-white" />
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-2.5">
+              <Scale className="h-6 w-6 text-white" />
+            </div>
+            <span className="text-xl font-bold text-slate-800">JustIA Consumidor</span>
           </div>
-          <span className="text-xl font-bold text-slate-800">JustIA Consumidor</span>
+          <div className="flex items-center gap-3">
+            {isSignedIn ? (
+              <>
+                <a
+                  href="/mis-casos"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  Mis casos
+                </a>
+                <UserButton />
+              </>
+            ) : (
+              <SignInButton mode="modal">
+                <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50">
+                  Iniciar sesión
+                </button>
+              </SignInButton>
+            )}
+          </div>
         </div>
       </header>
 

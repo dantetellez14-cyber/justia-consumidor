@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Scale, Send, Info, Sparkles, ArrowLeft } from "lucide-react";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
 import { calculateFinancialMetrics } from "@/lib/scoring";
@@ -96,6 +97,7 @@ export default function Home() {
     new Set()
   );
   const [caseId, setCaseId] = useState<string | null>(null);
+  const { isSignedIn } = useAuth();
 
   const markCompleted = (s: AppStep) => {
     setCompletedSteps((prev) => new Set([...prev, s]));
@@ -217,6 +219,17 @@ export default function Home() {
               <Info className="h-4 w-4" />
               <span className="hidden sm:inline">Fórmula E</span>
             </button>
+            {isSignedIn && (
+              <>
+                <a
+                  href="/mis-casos"
+                  className="hidden items-center rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 sm:flex"
+                >
+                  Mis casos
+                </a>
+                <UserButton />
+              </>
+            )}
           </div>
         </div>
       </header>
