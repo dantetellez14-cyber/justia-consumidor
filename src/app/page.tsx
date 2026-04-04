@@ -127,7 +127,25 @@ export default function Home() {
       const data: CaseAnalysis = await res.json();
       setAnalysis(data);
       setMetrics(calculateFinancialMetrics(data));
-      setRelevantCases(filterByCountry(data.pais_detectado));
+
+      // Try Pinecone semantic search, fallback to static list
+      const searchQuery = `${data.core_grievance} ${data.producto_servicio} ${data.analisis_legal}`;
+      try {
+        const searchRes = await fetch("/api/search-jurisprudencia", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchQuery, pais: data.pais_detectado }),
+        });
+        const searchData = await searchRes.json();
+        if (searchData.cases && searchData.cases.length > 0) {
+          setRelevantCases(searchData.cases);
+        } else {
+          setRelevantCases(filterByCountry(data.pais_detectado));
+        }
+      } catch {
+        setRelevantCases(filterByCountry(data.pais_detectado));
+      }
+
       markCompleted("analyze");
 
       // Save to Supabase
