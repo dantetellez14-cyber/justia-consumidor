@@ -8,6 +8,7 @@ import {
 import { sendComplaintSchema, formatZodError } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
+import { notifyEmpresaNewComplaint } from "@/lib/notifications";
 
 const log = createRouteLogger("/api/send-complaint");
 
@@ -125,6 +126,16 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({ status: "enviado_empresa" }),
       });
     }
+
+    // 4. Fire-and-forget: notify empresa via portal (if registered)
+    notifyEmpresaNewComplaint({
+      empresaNombre: analysis.empresa,
+      consumidorNombre: nombre,
+      productoServicio: analysis.producto_servicio,
+      montoReclamo: analysis.monto_reclamo,
+      pais: analysis.pais_detectado,
+      coreGrievance: analysis.core_grievance,
+    }).catch(() => {}); // swallow — non-critical
 
     log.info(
       { empresa: analysis.empresa, caseId, complaint: results.complaint, confirmation: results.confirmation },

@@ -31,6 +31,29 @@ vi.mock("@/lib/logger", () => ({
   }),
 }));
 
+// Mock supabase (used by notifications.ts)
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          ilike: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null }),
+            }),
+          }),
+        }),
+      }),
+    }),
+  },
+  supabasePublic: {},
+}));
+
+// Mock notifications (fire-and-forget, don't test here)
+vi.mock("@/lib/notifications", () => ({
+  notifyEmpresaNewComplaint: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock fetch for case status update
 vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
 

@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { getCompanyForUser, submitResponse } from "@/lib/empresa";
+import { notifyConsumerResponse } from "@/lib/notifications";
 
 const responseSchema = z.object({
   case_id: z.string().uuid("ID de caso invalido"),
@@ -79,6 +80,15 @@ export async function POST(request: NextRequest) {
         propuesta_monto: parsed.data.propuesta_monto,
       }
     );
+
+    // Fire-and-forget: notify the consumer by email
+    notifyConsumerResponse({
+      caseId: parsed.data.case_id,
+      empresaNombre: company.account.nombre,
+      tipoRespuesta: parsed.data.tipo_respuesta,
+      mensaje: parsed.data.mensaje,
+      propuestaMonto: parsed.data.propuesta_monto ?? null,
+    }).catch(() => {}); // swallow — non-critical
 
     return NextResponse.json(response);
   } catch (err) {
