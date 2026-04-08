@@ -4,6 +4,7 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { getComplaintStats, mapCategoryToSector } from "@/lib/complaint-stats";
 import { calculateReputationScore } from "@/lib/reputation-score";
 import { logError, createRouteLogger } from "@/lib/logger";
+import { cached } from "@/lib/cache";
 
 const log = createRouteLogger("/api/complaint-stats");
 
@@ -55,24 +56,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const resolvedSector = sector || mapCategoryToSector(categoria);
 
   try {
-    const stats = await getComplaintStats(empresa, resolvedSector, pais);
+    // Cache key based on normalized query params — 1 hour TTL
+    const cacheKey = `stats:${empresa.toLowerCase().trim()}:${resolvedSector}:${pais}`;
+
+    const result = await cached(cacheKey, 3600, async () => {
+      const stats = await getComplaintStats(empresa, resolvedSector, pais);
+
+      const reputationScore = stats.company
+        ? calculateReputationScore(stats.company, stats.sectorStats)
+        : null;
+
+      return { ...stats, reputationScore };
+    });
 
     log.info(
-      {
-        empresa,
-        sector: resolvedSector,
-        pais,
-        found: !!stats.company,
-      },
+      { empresa, sector: resolvedSector, pais, found: !!result.company },
       "Complaint stats queried"
     );
 
-    // Calculate reputation score if we have company data
-    const reputationScore = stats.company
-      ? calculateReputationScore(stats.company, stats.sectorStats)
-      : null;
-
-    return NextResponse.json({ ...stats, reputationScore });
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=1800",
+      },
+    });
   } catch (err) {
     logError("Complaint stats query error", err, {
       route: "/api/complaint-stats",

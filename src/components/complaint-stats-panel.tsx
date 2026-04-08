@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -105,40 +105,24 @@ function ResolutionBar({
 // ── Main Component ──
 
 export function ComplaintStatsPanel({ empresa, sector, pais }: Props) {
-  const [stats, setStats] = useState<ComplaintStatsResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const body = empresa ? { empresa, sector: sector ?? "", pais } : null;
 
-  useEffect(() => {
-    if (!empresa) return;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-
-    fetch("/api/complaint-stats", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ empresa, sector: sector ?? "", pais }),
-    })
-      .then((res) => {
+  const { data: stats, error, isLoading: loading } = useSWR<ComplaintStatsResult>(
+    body ? ["/api/complaint-stats", body] : null,
+    ([url, params]: [string, unknown]) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      }).then((res) => {
         if (!res.ok) throw new Error("fetch failed");
         return res.json();
-      })
-      .then((data: ComplaintStatsResult) => {
-        if (!cancelled) setStats(data);
-      })
-      .catch(() => {
-        if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [empresa, sector, pais]);
+      }),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // dedupe identical requests for 60s
+    }
+  );
 
   if (loading) {
     return (

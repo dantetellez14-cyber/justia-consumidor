@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { UserButton, SignInButton } from "@clerk/nextjs";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
@@ -879,31 +881,25 @@ function ComplaintDetail({
 
 export default function EmpresaPage() {
   const { isLoaded, isSignedIn } = useUser();
-  const [data, setData] = useState<EmpresaData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<DashboardView>("overview");
   const [selectedComplaint, setSelectedComplaint] =
     useState<CompanyCaseView | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/empresa");
-      const json = await res.json();
-      setData(json);
-      if (!json.registered) {
-        setView(json.suggestion ? "suggestion" : "register");
-      }
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
+  const { data, isLoading, isValidating, mutate } = useSWR<EmpresaData>(
+    isLoaded && isSignedIn ? "/api/empresa" : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      onSuccess: (json) => {
+        if (!json.registered) {
+          setView(json.suggestion ? "suggestion" : "register");
+        }
+      },
     }
-  }, []);
+  );
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    fetchData();
-  }, [isLoaded, isSignedIn, fetchData]);
+  const loading = !isLoaded || (isSignedIn && (isLoading || isValidating));
 
   if (!isLoaded) {
     return (
@@ -984,8 +980,7 @@ export default function EmpresaPage() {
           <CompanySuggestion
             suggestion={data.suggestion}
             onConfirm={() => {
-              setLoading(true);
-              fetchData();
+              mutate();
               setView("overview");
             }}
             onReject={() => setView("register")}
@@ -1000,8 +995,7 @@ export default function EmpresaPage() {
                 : undefined
             }
             onRegistered={() => {
-              setLoading(true);
-              fetchData();
+              mutate();
               setView("overview");
             }}
           />
@@ -1048,8 +1042,7 @@ export default function EmpresaPage() {
               onResponded={() => {
                 setView("overview");
                 setSelectedComplaint(null);
-                setLoading(true);
-                fetchData();
+                mutate();
               }}
             />
           )}

@@ -7,6 +7,7 @@ import {
 } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError } from "@/lib/logger";
+import { cached } from "@/lib/cache";
 
 const EMBEDDING_MODEL = "multilingual-e5-large";
 const TOP_K = 5;
@@ -53,51 +54,60 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pc = getPinecone();
+    // Cache key: normalize query to first 100 chars + country — 24h TTL
+    const normalizedQuery = query.toLowerCase().trim().slice(0, 100);
+    const cacheKey = `juris:${normalizedQuery}:${pais ?? "all"}`;
 
-    // Generate query embedding
-    const embedResponse = await pc.inference.embed({
-      model: EMBEDDING_MODEL,
-      inputs: [query],
-      parameters: { inputType: "query" },
-    });
-    const embedding = embedResponse.data[0];
-    if (embedding.vectorType !== "dense") {
-      throw new Error("Expected dense embedding");
-    }
-    const queryVector = embedding.values;
+    const result = await cached(cacheKey, 86400, async () => {
+      const pc = getPinecone();
 
-    // Search with optional country filter
-    const index = pc.index(PINECONE_INDEX_NAME);
-    const filter = pais ? { pais: { $eq: pais } } : undefined;
+      const embedResponse = await pc.inference.embed({
+        model: EMBEDDING_MODEL,
+        inputs: [query],
+        parameters: { inputType: "query" },
+      });
+      const embedding = embedResponse.data[0];
+      if (embedding.vectorType !== "dense") {
+        throw new Error("Expected dense embedding");
+      }
+      const queryVector = embedding.values;
 
-    const results = await index.query({
-      vector: queryVector,
-      topK: TOP_K,
-      includeMetadata: true,
-      filter,
-    });
+      const index = pc.index(PINECONE_INDEX_NAME);
+      const filter = pais ? { pais: { $eq: pais } } : undefined;
 
-    const cases: JurisprudenciaCase[] = (results.matches ?? []).map((match) => {
-      const meta = match.metadata as Record<string, unknown>;
+      const results = await index.query({
+        vector: queryVector,
+        topK: TOP_K,
+        includeMetadata: true,
+        filter,
+      });
+
+      const cases: JurisprudenciaCase[] = (results.matches ?? []).map((match) => {
+        const meta = match.metadata as Record<string, unknown>;
+        return {
+          expediente_id: String(meta.expediente_id ?? ""),
+          hechos: String(meta.hechos ?? ""),
+          ratio_decidendi: String(meta.ratio_decidendi ?? ""),
+          probabilidad_exito: Number(meta.probabilidad_exito ?? 0),
+          duracion_dias: Number(meta.duracion_dias ?? 0),
+          pais: (meta.pais === "MX" ? "MX" : "AR") as "AR" | "MX",
+        };
+      });
+
       return {
-        expediente_id: String(meta.expediente_id ?? ""),
-        hechos: String(meta.hechos ?? ""),
-        ratio_decidendi: String(meta.ratio_decidendi ?? ""),
-        probabilidad_exito: Number(meta.probabilidad_exito ?? 0),
-        duracion_dias: Number(meta.duracion_dias ?? 0),
-        pais: (meta.pais === "MX" ? "MX" : "AR") as "AR" | "MX",
+        cases,
+        source: "pinecone" as const,
+        scores: (results.matches ?? []).map((m) => m.score),
       };
     });
 
-    return NextResponse.json({
-      cases,
-      source: "pinecone",
-      scores: (results.matches ?? []).map((m) => m.score),
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=43200",
+      },
     });
   } catch (err) {
     logError("Pinecone search error", err, { route: "/api/search-jurisprudencia" });
-    // Return empty so the app falls back to static data
     return NextResponse.json({ cases: [], source: "error" });
   }
 }

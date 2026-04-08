@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import useSWR from "swr";
+import { fetcher } from "@/lib/swr";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -66,33 +67,18 @@ function formatCurrency(amount: number, country: string | null): string {
 
 export default function MisCasosPage() {
   const { isLoaded, isSignedIn } = useUser();
-  const [cases, setCases] = useState<ReadonlyArray<CaseRecord>>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-
-    async function fetchCases() {
-      try {
-        const res = await fetch("/api/cases");
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Error al cargar los casos.");
-        }
-        const data = await res.json();
-        setCases(data);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Error al cargar los casos."
-        );
-      } finally {
-        setLoading(false);
-      }
+  const { data: cases, error: swrError, isLoading } = useSWR<ReadonlyArray<CaseRecord>>(
+    isLoaded && isSignedIn ? "/api/cases" : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000, // dedupe for 30s
     }
+  );
 
-    fetchCases();
-  }, [isLoaded, isSignedIn]);
+  const loading = !isLoaded || (isSignedIn && isLoading);
+  const error = swrError ? (swrError instanceof Error ? swrError.message : "Error al cargar los casos.") : null;
 
   if (!isLoaded) {
     return (
@@ -159,7 +145,7 @@ export default function MisCasosPage() {
           </div>
         )}
 
-        {!loading && !error && cases.length === 0 && (
+        {!loading && !error && (!cases || cases.length === 0) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -182,7 +168,7 @@ export default function MisCasosPage() {
           </motion.div>
         )}
 
-        {!loading && cases.length > 0 && (
+        {!loading && cases && cases.length > 0 && (
           <div className="space-y-4">
             {cases.map((c, i) => {
               const statusCfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.consulta_recibida;
