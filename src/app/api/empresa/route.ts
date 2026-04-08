@@ -1,0 +1,223 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import {
+  getCompanyForUser,
+  registerCompany,
+  getCompanyDashboardStats,
+  getCompanyComplaints,
+  findCompanyByEmailDomain,
+  findCasesByEmailDomain,
+  linkUserToCompany,
+} from "@/lib/empresa";
+import { clerkClient } from "@clerk/nextjs/server";
+
+const registerSchema = z.object({
+  nombre: z.string().min(2, "Nombre de empresa requerido"),
+  rfc: z.string().optional(),
+  cuit: z.string().optional(),
+  sector: z.string().optional(),
+  pais: z.enum(["AR", "MX"]),
+  email_contacto: z.string().email().optional(),
+  telefono: z.string().optional(),
+  domicilio: z.string().optional(),
+});
+
+/**
+ * GET /api/empresa — Get company profile, stats, and complaints
+ */
+export async function GET(request: NextRequest) {
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`empresa-get:${ip}`, {
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Demasiadas solicitudes. Intenta en ${resetIn}s.` },
+      { status: 429 }
+    );
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesion." },
+      { status: 401 }
+    );
+  }
+
+  const company = await getCompanyForUser(userId);
+  if (!company) {
+    // Try auto-detection by email domain
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const email = user.emailAddresses[0]?.emailAddress ?? "";
+
+    // Check if email domain matches a registered company
+    const existingMatch = await findCompanyByEmailDomain(email);
+    if (existingMatch) {
+      return NextResponse.json({
+        registered: false,
+        suggestion: {
+          type: "existing_account" as const,
+          account: existingMatch,
+          email,
+        },
+      });
+    }
+
+    // Check if email domain matches complaints in cases table
+    const casesMatch = await findCasesByEmailDomain(email);
+    if (casesMatch) {
+      return NextResponse.json({
+        registered: false,
+        suggestion: {
+          type: "has_complaints" as const,
+          empresaName: casesMatch.empresaName,
+          complaintCount: casesMatch.count,
+          email,
+        },
+      });
+    }
+
+    return NextResponse.json({ registered: false });
+  }
+
+  const [stats, complaints] = await Promise.all([
+    getCompanyDashboardStats(company.account),
+    getCompanyComplaints(company.account),
+  ]);
+
+  return NextResponse.json({
+    registered: true,
+    account: company.account,
+    role: company.role,
+    stats,
+    complaints,
+  });
+}
+
+/**
+ * PUT /api/empresa — Claim/link to an existing company account
+ */
+export async function PUT(request: NextRequest) {
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`empresa-put:${ip}`, {
+    limit: 5,
+    windowSeconds: 60,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Demasiadas solicitudes. Intenta en ${resetIn}s.` },
+      { status: 429 }
+    );
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesion." },
+      { status: 401 }
+    );
+  }
+
+  const existing = await getCompanyForUser(userId);
+  if (existing) {
+    return NextResponse.json(
+      { error: "Ya tienes una empresa vinculada." },
+      { status: 409 }
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Cuerpo de solicitud invalido." },
+      { status: 400 }
+    );
+  }
+
+  const claimSchema = z.object({
+    company_id: z.string().uuid("ID de empresa invalido"),
+  });
+
+  const parsed = claimSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues.map((i) => i.message).join(", ") },
+      { status: 400 }
+    );
+  }
+
+  try {
+    await linkUserToCompany(userId, parsed.data.company_id, "operador");
+    return NextResponse.json({ linked: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al vincular.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/empresa — Register a new company account
+ */
+export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`empresa-post:${ip}`, {
+    limit: 5,
+    windowSeconds: 60,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Demasiadas solicitudes. Intenta en ${resetIn}s.` },
+      { status: 429 }
+    );
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesion." },
+      { status: 401 }
+    );
+  }
+
+  // Check if user already has a company
+  const existing = await getCompanyForUser(userId);
+  if (existing) {
+    return NextResponse.json(
+      { error: "Ya tienes una empresa registrada." },
+      { status: 409 }
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Cuerpo de solicitud invalido." },
+      { status: 400 }
+    );
+  }
+
+  const parsed = registerSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues.map((i) => i.message).join(", ") },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const account = await registerCompany(userId, parsed.data);
+    return NextResponse.json({ registered: true, account });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al registrar.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

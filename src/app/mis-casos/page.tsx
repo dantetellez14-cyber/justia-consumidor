@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Scale,
   ArrowLeft,
@@ -111,12 +112,12 @@ export default function MisCasosPage() {
         <p className="mt-2 text-sm text-slate-500">
           Necesitás una cuenta para acceder al historial de tus reclamos.
         </p>
-        <a
+        <Link
           href="/"
           className="mt-6 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-medium text-white"
         >
           Volver al inicio
-        </a>
+        </Link>
       </div>
     );
   }
@@ -126,12 +127,12 @@ export default function MisCasosPage() {
       {/* Header */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
-          <a
+          <Link
             href="/"
             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
             <ArrowLeft className="h-5 w-5" />
-          </a>
+          </Link>
           <div className="rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-2">
             <Scale className="h-5 w-5 text-white" />
           </div>
@@ -172,12 +173,12 @@ export default function MisCasosPage() {
               Cuando analices tu primer reclamo, aparecerá acá para que puedas
               darle seguimiento.
             </p>
-            <a
+            <Link
               href="/"
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-3 font-medium text-white shadow-md"
             >
               Comenzar un reclamo
-            </a>
+            </Link>
           </motion.div>
         )}
 
@@ -259,11 +260,21 @@ export default function MisCasosPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-100 py-6 text-center">
-        <p className="text-xs text-slate-400">
-          JustIA Consumidor &mdash; Cuando una empresa falla, tus derechos no
-          deben fallar contigo.
-        </p>
+      <footer className="border-t border-slate-100 py-6">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-6 sm:flex-row sm:justify-between">
+          <p className="text-xs text-slate-400">
+            JustIA Consumidor &mdash; Cuando una empresa falla, tus derechos no
+            deben fallar contigo.
+          </p>
+          <div className="flex gap-4">
+            <Link href="/privacidad" className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline">
+              Privacidad
+            </Link>
+            <Link href="/terminos" className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline">
+              Términos de uso
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

@@ -6,6 +6,7 @@ import {
   Clock,
   Send,
   Scale,
+  Landmark,
   ExternalLink,
   ArrowRight,
 } from "lucide-react";
@@ -15,6 +16,8 @@ interface Props {
   readonly analysis: CaseAnalysis;
   readonly hasComplaint: boolean;
   readonly hasArbitration: boolean;
+  readonly hasEscalation?: boolean;
+  readonly onEscalate?: () => void;
   readonly onFinish: () => void;
 }
 
@@ -30,6 +33,8 @@ export function CaseTracker({
   analysis,
   hasComplaint,
   hasArbitration,
+  hasEscalation,
+  onEscalate,
   onFinish,
 }: Props) {
   const today = new Date().toLocaleDateString("es-AR", {
@@ -69,6 +74,15 @@ export function CaseTracker({
       status: hasArbitration ? "completed" : "pending",
       icon: Scale,
       date: hasArbitration ? today : undefined,
+    },
+    {
+      label: analysis.pais_detectado === "MX" ? "Escalado a PROFECO" : "Escalado a COPREC",
+      description: hasEscalation
+        ? "Documento de presentación generado. Queja presentada ante organismo oficial."
+        : "Disponible para escalar ante el organismo de defensa del consumidor.",
+      status: hasEscalation ? "completed" : "pending",
+      icon: Landmark,
+      date: hasEscalation ? today : undefined,
     },
     {
       label: "Resolución",
@@ -187,20 +201,33 @@ export function CaseTracker({
         className="rounded-xl border border-amber-200 bg-amber-50 p-5"
       >
         <h4 className="mb-2 text-sm font-semibold text-amber-800">
-          Escalar a organismo oficial
+          {hasEscalation ? "Escalamiento realizado" : "Escalar a organismo oficial"}
         </h4>
         <p className="mb-3 text-xs text-amber-700">
-          Si tu reclamo no fue resuelto, podés presentar una denuncia formal ante:
+          {hasEscalation
+            ? `Tu documento de presentación ante ${defensaLabel} fue generado. Recuerda presentarlo en el portal oficial.`
+            : "Si tu reclamo no fue resuelto, generamos el documento completo para presentar ante:"}
         </p>
-        <a
-          href={defensaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-200"
-        >
-          <ExternalLink className="h-4 w-4" />
-          {defensaLabel}
-        </a>
+        <div className="flex flex-wrap gap-2">
+          {onEscalate && !hasEscalation && (
+            <button
+              onClick={onEscalate}
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-shadow hover:shadow-md"
+            >
+              <Landmark className="h-4 w-4" />
+              Generar presentación ante {analysis.pais_detectado === "MX" ? "PROFECO" : "COPREC"}
+            </button>
+          )}
+          <a
+            href={defensaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-200"
+          >
+            <ExternalLink className="h-4 w-4" />
+            {defensaLabel}
+          </a>
+        </div>
       </motion.div>
 
       {/* Next action */}

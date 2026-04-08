@@ -3,7 +3,23 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/**
+ * Public client (anon key) — used only on the client-side.
+ * Subject to RLS policies. With strict policies, this client
+ * cannot read/write data directly.
+ */
+export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Admin client (secret key) — used only on the server-side (API routes).
+ * Bypasses RLS, so access control is handled by Clerk auth in each route.
+ *
+ * NEVER expose this client or SUPABASE_SECRET_KEY to the browser.
+ */
+export const supabase = createClient(
+  supabaseUrl,
+  process.env.SUPABASE_SECRET_KEY || supabaseAnonKey
+);
 
 export type CaseStatus =
   | "consulta_recibida"

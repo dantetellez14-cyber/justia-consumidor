@@ -1,15 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { supabase } from "@/lib/supabase";
+import { feedbackSchema, formatZodError } from "@/lib/validations";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 // POST: Submit feedback
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  const body = await request.json();
+  // Rate limit: 10 feedback submissions per minute per IP
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`feedback:${ip}`, {
+    limit: 10,
+    windowSeconds: 60,
+  });
 
-  if (!body.rating || body.rating < 1 || body.rating > 5) {
+  if (!allowed) {
     return NextResponse.json(
-      { error: "Rating must be between 1 and 5" },
+      { error: `Demasiadas solicitudes. Intenta de nuevo en ${resetIn} segundos.` },
+      { status: 429 }
+    );
+  }
+
+  const { userId } = await auth();
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Cuerpo de solicitud inválido." },
+      { status: 400 }
+    );
+  }
+
+  const parsed = feedbackSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: formatZodError(parsed.error) },
       { status: 400 }
     );
   }
@@ -17,9 +44,9 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("feedback")
     .insert({
-      case_id: body.case_id || null,
-      rating: body.rating,
-      comment: body.comment || null,
+      case_id: parsed.data.case_id ?? null,
+      rating: parsed.data.rating,
+      comment: parsed.data.comment ?? null,
       user_id: userId,
     })
     .select()

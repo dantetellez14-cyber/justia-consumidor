@@ -5,24 +5,35 @@ import {
   buildComplaintEmailHtml,
   buildUserConfirmationHtml,
 } from "@/lib/email/templates";
-import type { CaseAnalysis } from "@/lib/types";
+import { sendComplaintSchema, formatZodError } from "@/lib/validations";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { logError, createRouteLogger } from "@/lib/logger";
+
+const log = createRouteLogger("/api/send-complaint");
 
 function getResend(): Resend {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "JustIA Consumidor <noreply@justia-consumidor.com>";
-
-interface SendComplaintBody {
-  analysis: CaseAnalysis;
-  nombre: string;
-  email: string;
-  empresaEmail: string;
-  complaintText: string;
-  caseId: string | null;
-}
+const FROM_EMAIL =
+  process.env.RESEND_FROM_EMAIL ||
+  "JustIA Consumidor <noreply@justia-consumidor.com>";
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 5 emails per hour per IP
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`send-complaint:${ip}`, {
+    limit: 5,
+    windowSeconds: 3600,
+  });
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Demasiadas solicitudes. Intenta de nuevo en ${Math.ceil(resetIn / 60)} minutos.` },
+      { status: 429 }
+    );
+  }
+
   const { userId } = await auth();
 
   if (!userId) {
@@ -39,22 +50,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body: SendComplaintBody = await request.json();
-  const { analysis, nombre, email, empresaEmail, complaintText, caseId } = body;
-
-  if (!nombre || !email) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
     return NextResponse.json(
-      { error: "Nombre y email son requeridos." },
+      { error: "Cuerpo de solicitud inválido." },
       { status: 400 }
     );
   }
 
-  if (!empresaEmail) {
+  const parsed = sendComplaintSchema.safeParse(body);
+
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "El email de la empresa es requerido." },
+      { error: formatZodError(parsed.error) },
       { status: 400 }
     );
   }
+
+  const { analysis, nombre, email, empresaEmail, complaintText, caseId } =
+    parsed.data;
 
   const results = { complaint: false, confirmation: false };
 
@@ -83,7 +99,10 @@ export async function POST(request: NextRequest) {
     results.complaint = true;
 
     // 2. Send confirmation to the user
-    const confirmationHtml = buildUserConfirmationHtml(nombre, analysis.empresa);
+    const confirmationHtml = buildUserConfirmationHtml(
+      nombre,
+      analysis.empresa
+    );
 
     const { error: confirmError } = await resend.emails.send({
       from: FROM_EMAIL,
@@ -93,7 +112,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (confirmError) {
-      console.error("Confirmation email failed:", confirmError.message);
+      log.warn({ error: confirmError.message }, "Confirmation email failed");
     } else {
       results.confirmation = true;
     }
@@ -107,13 +126,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    log.info(
+      { empresa: analysis.empresa, caseId, complaint: results.complaint, confirmation: results.confirmation },
+      "Complaint sent"
+    );
+
     return NextResponse.json({
       success: true,
       message: "Reclamo enviado exitosamente.",
       results,
     });
   } catch (err) {
-    console.error("Resend error:", err);
+    logError("Resend error", err, { route: "/api/send-complaint", empresa: analysis.empresa });
     const message =
       err instanceof Error ? err.message : "Error al enviar el email.";
     return NextResponse.json({ error: message }, { status: 500 });

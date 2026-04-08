@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { logError, createRouteLogger } from "@/lib/logger";
+
+const log = createRouteLogger("/api/analyze");
 
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "gemma2:9b";
@@ -50,14 +54,41 @@ function extractJSON(text: string): Record<string, unknown> {
 }
 
 export async function POST(request: NextRequest) {
-  const { relato } = await request.json();
+  // Rate limit: 10 analyses per minute per IP
+  const ip = getClientIp(request);
+  const { allowed, resetIn } = await rateLimit(`analyze:${ip}`, {
+    limit: 10,
+    windowSeconds: 60,
+  });
 
-  if (!relato || typeof relato !== "string" || relato.trim().length === 0) {
+  if (!allowed) {
     return NextResponse.json(
-      { error: "El relato del caso es requerido." },
+      { error: `Demasiadas solicitudes. Intenta de nuevo en ${resetIn} segundos.` },
+      { status: 429 }
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Cuerpo de solicitud inválido." },
       { status: 400 }
     );
   }
+
+  const { analyzeSchema, formatZodError } = await import("@/lib/validations");
+  const parsed = analyzeSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: formatZodError(parsed.error) },
+      { status: 400 }
+    );
+  }
+
+  const { relato } = parsed.data;
 
   try {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
@@ -116,9 +147,14 @@ export async function POST(request: NextRequest) {
       pais_detectado: pais === "MX" ? "MX" : "AR",
     };
 
+    log.info(
+      { empresa: String(analysis.empresa), pais: normalizedAnalysis.pais_detectado },
+      "Analysis completed"
+    );
+
     return NextResponse.json(normalizedAnalysis);
   } catch (err) {
-    console.error("Ollama API error:", err);
+    logError("Ollama API error", err, { route: "/api/analyze" });
 
     // Fallback: generate a demo analysis when Ollama is unavailable (e.g., Vercel production)
     if (process.env.DEMO_MODE === "true" || (err instanceof TypeError && String(err.message).includes("fetch"))) {

@@ -2,13 +2,15 @@
 
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Scale, Send, Info, Sparkles, ArrowLeft } from "lucide-react";
+import { Scale, Info, ArrowLeft } from "lucide-react";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
 import { calculateFinancialMetrics } from "@/lib/scoring";
 import { filterByCountry } from "@/lib/jurisprudencia";
 import { WelcomeHero } from "@/components/welcome-hero";
+import { ComplaintForm } from "@/components/complaint-form";
+import type { ComplaintFormData } from "@/components/complaint-form";
 import { ExtractedEntities } from "@/components/extracted-entities";
 import { FinancialChart } from "@/components/financial-chart";
 import { RecommendationAlert } from "@/components/recommendation-alert";
@@ -18,7 +20,9 @@ import { FooterMetrics } from "@/components/footer-metrics";
 import { LoadingAnimation } from "@/components/loading-animation";
 import { ComplaintGenerator } from "@/components/complaint-generator";
 import { ArbitrationModule } from "@/components/arbitration-module";
+import { EscalationModule } from "@/components/escalation-module";
 import { CaseTracker } from "@/components/case-tracker";
+import { ComplaintStatsPanel } from "@/components/complaint-stats-panel";
 import { FeedbackRating } from "@/components/feedback-rating";
 
 type AppStep =
@@ -27,6 +31,7 @@ type AppStep =
   | "results"
   | "complaint"
   | "arbitration"
+  | "escalation"
   | "tracking"
   | "feedback";
 
@@ -36,6 +41,7 @@ const STEP_LABELS: Record<AppStep, string> = {
   results: "Análisis",
   complaint: "Reclamo",
   arbitration: "Mediación",
+  escalation: "Escalamiento",
   tracking: "Seguimiento",
   feedback: "Feedback",
 };
@@ -46,12 +52,10 @@ const STEP_ORDER: AppStep[] = [
   "results",
   "complaint",
   "arbitration",
+  "escalation",
   "tracking",
   "feedback",
 ];
-
-const EXAMPLE_CASE =
-  "Compré un televisor Smart TV de 55 pulgadas en una tienda online por $450,000 ARS. Al recibirlo, la pantalla tenía líneas verticales y no funcionaba el sonido. Contacté a la empresa MegaTech Argentina pero se niegan a hacer el cambio o la devolución del dinero, diciendo que el plazo de garantía ya venció, cuando solo pasaron 2 semanas desde la compra.";
 
 async function saveCase(relato: string, analysis: CaseAnalysis): Promise<string | null> {
   try {
@@ -103,64 +107,87 @@ export default function Home() {
     setCompletedSteps((prev) => new Set([...prev, s]));
   };
 
-  const handleAnalyze = useCallback(async () => {
-    if (!relato.trim()) return;
+  const handleAnalyze = useCallback(
+    async (composedRelato: string, submittedForm: ComplaintFormData) => {
+      if (!composedRelato.trim()) return;
 
-    setLoading(true);
-    setError(null);
-    setAnalysis(null);
-    setMetrics(null);
-    setRelevantCases([]);
+      setRelato(composedRelato);
+      setLoading(true);
+      setError(null);
+      setAnalysis(null);
+      setMetrics(null);
+      setRelevantCases([]);
 
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ relato }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al analizar el caso.");
-      }
-
-      const data: CaseAnalysis = await res.json();
-      setAnalysis(data);
-      setMetrics(calculateFinancialMetrics(data));
-
-      // Try Pinecone semantic search, fallback to static list
-      const searchQuery = `${data.core_grievance} ${data.producto_servicio} ${data.analisis_legal}`;
       try {
-        const searchRes = await fetch("/api/search-jurisprudencia", {
+        const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: searchQuery, pais: data.pais_detectado }),
+          body: JSON.stringify({ relato: composedRelato }),
         });
-        const searchData = await searchRes.json();
-        if (searchData.cases && searchData.cases.length > 0) {
-          setRelevantCases(searchData.cases);
-        } else {
-          setRelevantCases(filterByCountry(data.pais_detectado));
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Error al analizar el caso.");
         }
-      } catch {
-        setRelevantCases(filterByCountry(data.pais_detectado));
+
+        const data: CaseAnalysis = await res.json();
+
+        // Override AI-extracted fields with user-provided structured data
+        const enrichedAnalysis: CaseAnalysis = {
+          ...data,
+          empresa: submittedForm.empresa || data.empresa,
+          producto_servicio: submittedForm.producto || data.producto_servicio,
+          ...(submittedForm.monto
+            ? { monto_reclamo: Number(submittedForm.monto) }
+            : {}),
+          ...(submittedForm.fechaCompra
+            ? { fecha_incidente: submittedForm.fechaCompra }
+            : {}),
+          pais_detectado:
+            submittedForm.moneda === "MXN" ? "MX" : data.pais_detectado,
+        };
+
+        setAnalysis(enrichedAnalysis);
+        setMetrics(calculateFinancialMetrics(enrichedAnalysis));
+
+        // Try Pinecone semantic search, fallback to static list
+        const searchQuery = `${enrichedAnalysis.core_grievance} ${enrichedAnalysis.producto_servicio} ${enrichedAnalysis.analisis_legal}`;
+        try {
+          const searchRes = await fetch("/api/search-jurisprudencia", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: searchQuery,
+              pais: enrichedAnalysis.pais_detectado,
+            }),
+          });
+          const searchData = await searchRes.json();
+          if (searchData.cases && searchData.cases.length > 0) {
+            setRelevantCases(searchData.cases);
+          } else {
+            setRelevantCases(filterByCountry(enrichedAnalysis.pais_detectado));
+          }
+        } catch {
+          setRelevantCases(filterByCountry(enrichedAnalysis.pais_detectado));
+        }
+
+        markCompleted("analyze");
+
+        // Save to Supabase
+        const savedId = await saveCase(composedRelato, enrichedAnalysis);
+        if (savedId) {
+          setCaseId(savedId);
+        }
+
+        setStep("results");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Error inesperado.");
+      } finally {
+        setLoading(false);
       }
-
-      markCompleted("analyze");
-
-      // Save to Supabase
-      const savedId = await saveCase(relato, data);
-      if (savedId) {
-        setCaseId(savedId);
-      }
-
-      setStep("results");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado.");
-    } finally {
-      setLoading(false);
-    }
-  }, [relato]);
+    },
+    []
+  );
 
   const handleRestart = () => {
     setStep("welcome");
@@ -254,67 +281,14 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
-        {/* STEP: Analyze (input) */}
+        {/* STEP: Analyze (structured form) */}
         {step === "analyze" && (
-          <div className="mx-auto max-w-2xl">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <div className="mb-4 text-center">
-                <h2 className="text-xl font-bold text-slate-800">
-                  Contanos qué pasó
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Describí tu problema en tus palabras. La IA se encarga del
-                  resto.
-                </p>
-              </div>
-
-              <div className="mb-3 flex justify-end">
-                <button
-                  onClick={() => setRelato(EXAMPLE_CASE)}
-                  className="flex items-center gap-1 rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-100"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  Cargar ejemplo
-                </button>
-              </div>
-
-              <textarea
-                value={relato}
-                onChange={(e) => setRelato(e.target.value)}
-                placeholder="Ej: 'Compré un celular online y cuando llegó no funcionaba. La empresa no me responde los reclamos...'"
-                className="h-40 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
-
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-                >
-                  {error}
-                </motion.div>
-              )}
-
-              <button
-                onClick={handleAnalyze}
-                disabled={loading || !relato.trim()}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 font-medium text-white shadow-lg shadow-blue-200 transition-all hover:shadow-xl hover:shadow-blue-300 disabled:opacity-50 disabled:shadow-none"
-              >
-                {loading ? (
-                  "Analizando..."
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    Analizar mi caso
-                  </>
-                )}
-              </button>
-            </motion.div>
-
+          <div>
+            <ComplaintForm
+              onSubmit={handleAnalyze}
+              loading={loading}
+              error={error}
+            />
             {loading && (
               <div className="mt-8">
                 <LoadingAnimation />
@@ -343,6 +317,15 @@ export default function Home() {
                   {analysis.analisis_legal}
                 </p>
               </motion.div>
+
+              {/* Complaint Statistics from PROFECO / Defensa del Consumidor */}
+              <div className="mt-4">
+                <ComplaintStatsPanel
+                  empresa={analysis.empresa}
+                  sector={analysis.producto_servicio}
+                  pais={analysis.pais_detectado}
+                />
+              </div>
             </div>
 
             {/* Right Panel */}
@@ -415,6 +398,25 @@ export default function Home() {
           </div>
         )}
 
+        {/* STEP: Escalation to PROFECO/COPREC */}
+        {step === "escalation" && analysis && (
+          <div className="mx-auto max-w-2xl">
+            <EscalationModule
+              analysis={analysis}
+              caseId={caseId}
+              onNext={() => {
+                markCompleted("escalation");
+                if (caseId) {
+                  updateCase(caseId, {
+                    status: "escalado",
+                  });
+                }
+                setStep("tracking");
+              }}
+            />
+          </div>
+        )}
+
         {/* STEP: Case Tracking */}
         {step === "tracking" && analysis && (
           <div className="mx-auto max-w-2xl">
@@ -422,6 +424,8 @@ export default function Home() {
               analysis={analysis}
               hasComplaint={completedSteps.has("complaint")}
               hasArbitration={completedSteps.has("arbitration")}
+              hasEscalation={completedSteps.has("escalation")}
+              onEscalate={() => setStep("escalation")}
               onFinish={() => {
                 markCompleted("tracking");
                 setStep("feedback");

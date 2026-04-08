@@ -1,8 +1,9 @@
 "use client";
 
-import { Scale, Shield, Clock, FileText, Users, ArrowRight } from "lucide-react";
+import { Scale, Shield, Clock, FileText, Users, ArrowRight, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 
 interface Props {
   readonly onStart: () => void;
@@ -53,6 +54,13 @@ export function WelcomeHero({ onStart }: Props) {
             <span className="text-xl font-bold text-slate-800">JustIA Consumidor</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/empresa"
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              Soy empresa
+            </Link>
             {isSignedIn ? (
               <>
                 <a
@@ -66,7 +74,7 @@ export function WelcomeHero({ onStart }: Props) {
             ) : (
               <SignInButton mode="modal">
                 <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50">
-                  Iniciar sesión
+                  Iniciar sesion
                 </button>
               </SignInButton>
             )}
@@ -173,6 +181,38 @@ export function WelcomeHero({ onStart }: Props) {
             </div>
           </motion.div>
 
+          {/* Company CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+            className="mt-20"
+          >
+            <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50 p-8">
+              <div className="flex flex-col items-center gap-6 sm:flex-row">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 shadow-lg shadow-emerald-200">
+                  <Building2 className="h-7 w-7 text-white" />
+                </div>
+                <div className="flex-1 text-center sm:text-left">
+                  <h3 className="text-lg font-bold text-slate-800">
+                    Sos una empresa?
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Gestiona reclamos de forma eficiente, reduce litigios y mejora tu reputacion.
+                    Accede al panel empresarial para responder reclamos antes de que escalen.
+                  </p>
+                </div>
+                <Link
+                  href="/empresa"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-shadow hover:shadow-lg"
+                >
+                  <Building2 className="h-4 w-4" />
+                  Portal empresarial
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+
           {/* Trust bar */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -190,10 +230,20 @@ export function WelcomeHero({ onStart }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-100 py-6 text-center">
-        <p className="text-xs text-slate-400">
-          JustIA Consumidor &mdash; Cuando una empresa falla, tus derechos no deben fallar contigo.
-        </p>
+      <footer className="border-t border-slate-100 py-6">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-6 sm:flex-row sm:justify-between">
+          <p className="text-xs text-slate-400">
+            JustIA Consumidor &mdash; Cuando una empresa falla, tus derechos no deben fallar contigo.
+          </p>
+          <div className="flex gap-4">
+            <Link href="/privacidad" className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline">
+              Privacidad
+            </Link>
+            <Link href="/terminos" className="text-xs text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline">
+              Términos de uso
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );
