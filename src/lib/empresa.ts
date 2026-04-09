@@ -191,20 +191,45 @@ export async function findCasesByEmailDomain(
 
 /**
  * Link an existing Clerk user to an existing company account.
- * Used when auto-detection identifies the user's company.
+ * Requires corporate email match. Promotes unverified companies.
  */
 export async function linkUserToCompany(
   clerkUserId: string,
   companyId: string,
+  userEmail: string,
+  companyName: string,
   rol: CompanyUser["rol"] = "operador"
-): Promise<void> {
+): Promise<{ emailVerified: boolean }> {
+  const isVerified = emailMatchesCompany(userEmail, companyName);
+
+  if (!isVerified) {
+    throw new Error(
+      "No puedes vincularte a esta empresa. Tu email debe ser corporativo (ej: @empresa.com)."
+    );
+  }
+
   const { error } = await supabase.from("company_users").insert({
     clerk_user_id: clerkUserId,
     company_id: companyId,
     rol,
+    email_verificado: isVerified,
   });
 
   if (error) throw new Error(`Error vinculando usuario: ${error.message}`);
+
+  if (isVerified) {
+    await supabase
+      .from("company_accounts")
+      .update({
+        verificada: true,
+        verificada_por: clerkUserId,
+        verificada_at: new Date().toISOString(),
+      })
+      .eq("id", companyId)
+      .eq("verificada", false);
+  }
+
+  return { emailVerified: isVerified };
 }
 
 // ── Company account operations ──
@@ -241,9 +266,11 @@ export async function getCompanyForUser(
 
 /**
  * Register a new company account and link the creating user as admin.
+ * Auto-verifies if the user's email domain matches the company name.
  */
 export async function registerCompany(
   clerkUserId: string,
+  userEmail: string,
   data: {
     nombre: string;
     rfc?: string;
@@ -256,6 +283,7 @@ export async function registerCompany(
   }
 ): Promise<CompanyAccount> {
   const normalized = normalizeEmpresaName(data.nombre);
+  const isVerified = emailMatchesCompany(userEmail, data.nombre);
 
   const { data: account, error } = await supabase
     .from("company_accounts")
@@ -269,17 +297,20 @@ export async function registerCompany(
       email_contacto: data.email_contacto ?? null,
       telefono: data.telefono ?? null,
       domicilio: data.domicilio ?? null,
+      verificada: isVerified,
+      verificada_por: isVerified ? clerkUserId : null,
+      verificada_at: isVerified ? new Date().toISOString() : null,
     })
     .select()
     .single();
 
   if (error) throw new Error(`Error creando empresa: ${error.message}`);
 
-  // Link user as admin
   await supabase.from("company_users").insert({
     clerk_user_id: clerkUserId,
     company_id: account.id,
     rol: "admin",
+    email_verificado: isVerified,
   });
 
   return account as CompanyAccount;
