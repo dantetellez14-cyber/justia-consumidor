@@ -51,6 +51,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!company.account.verificada) {
+    return NextResponse.json(
+      {
+        error:
+          "Empresa pendiente de verificacion. Un empleado con email corporativo debe vincularse para habilitar respuestas.",
+      },
+      { status: 403 }
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

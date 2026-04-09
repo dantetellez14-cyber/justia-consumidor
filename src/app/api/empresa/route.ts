@@ -12,6 +12,7 @@ import {
   linkUserToCompany,
 } from "@/lib/empresa";
 import { clerkClient } from "@clerk/nextjs/server";
+import { supabase } from "@/lib/supabase";
 
 const registerSchema = z.object({
   nombre: z.string().min(2, "Nombre de empresa requerido"),
@@ -154,11 +155,35 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    await linkUserToCompany(userId, parsed.data.company_id, "operador");
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const email = user.emailAddresses[0]?.emailAddress ?? "";
+
+    // Get company name for verification
+    const { data: companyData } = await supabase
+      .from("company_accounts")
+      .select("nombre")
+      .eq("id", parsed.data.company_id)
+      .single();
+
+    if (!companyData) {
+      return NextResponse.json(
+        { error: "Empresa no encontrada." },
+        { status: 404 }
+      );
+    }
+
+    await linkUserToCompany(
+      userId,
+      parsed.data.company_id,
+      email,
+      companyData.nombre,
+      "operador"
+    );
     return NextResponse.json({ linked: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al vincular.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 403 });
   }
 }
 
@@ -214,7 +239,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const account = await registerCompany(userId, parsed.data);
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const email = user.emailAddresses[0]?.emailAddress ?? "";
+    const account = await registerCompany(userId, email, parsed.data);
     return NextResponse.json({ registered: true, account });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al registrar.";
