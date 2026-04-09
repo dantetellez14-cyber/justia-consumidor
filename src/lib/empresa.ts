@@ -24,6 +24,9 @@ export interface CompanyAccount {
   readonly activa: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly verificada: boolean;
+  readonly verificada_por: string | null;
+  readonly verificada_at: string | null;
 }
 
 export interface CompanyUser {
@@ -32,6 +35,7 @@ export interface CompanyUser {
   readonly company_id: string;
   readonly rol: "admin" | "operador" | "lectura";
   readonly created_at: string;
+  readonly email_verificado: boolean;
 }
 
 export interface CompanyResponse {
@@ -111,6 +115,18 @@ export function extractCompanyFromEmail(email: string): string | null {
   if (!candidate || GENERIC_EMAIL_PROVIDERS.has(candidate)) return null;
 
   return candidate;
+}
+
+/**
+ * Check if a user's email domain matches a company name.
+ * Used to verify corporate email ownership.
+ */
+export function emailMatchesCompany(email: string, companyName: string): boolean {
+  const domain = extractCompanyFromEmail(email);
+  if (!domain) return false;
+
+  const normalized = normalizeEmpresaName(companyName);
+  return normalized.includes(domain);
 }
 
 /**
