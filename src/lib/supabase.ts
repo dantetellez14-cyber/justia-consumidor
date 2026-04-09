@@ -47,6 +47,20 @@ export interface CaseRecord {
   updated_at: string;
 }
 
+/** Consumer-facing view of a company response (omits internal IDs). */
+export interface CompanyResponseView {
+  readonly id: string;
+  readonly tipo_respuesta: "aceptar" | "rechazar" | "propuesta" | "solicitar_info";
+  readonly mensaje: string;
+  readonly propuesta_monto: number | null;
+  readonly created_at: string;
+}
+
+/** CaseRecord extended with company responses for consumer views. */
+export interface CaseWithResponses extends CaseRecord {
+  readonly company_responses: ReadonlyArray<CompanyResponseView>;
+}
+
 export interface FeedbackRecord {
   id: string;
   user_id: string | null;

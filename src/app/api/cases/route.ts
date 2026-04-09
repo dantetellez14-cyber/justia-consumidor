@@ -94,11 +94,14 @@ export async function GET(request: NextRequest) {
 
   const caseId = parsedQuery.data.id;
 
+  const CASE_WITH_RESPONSES_SELECT =
+    "*, company_responses(id, tipo_respuesta, mensaje, propuesta_monto, created_at)";
+
   // Single case lookup
   if (caseId) {
     const { data, error } = await supabase
       .from("cases")
-      .select()
+      .select(CASE_WITH_RESPONSES_SELECT)
       .eq("id", caseId)
       .single();
 
@@ -119,7 +122,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("cases")
-    .select()
+    .select(CASE_WITH_RESPONSES_SELECT)
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 

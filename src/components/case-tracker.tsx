@@ -1,6 +1,8 @@
 "use client";
 
 import { CaseAnalysis } from "@/lib/types";
+import type { CompanyResponseView } from "@/lib/supabase";
+import { CompanyResponseCard } from "./company-response-card";
 import {
   CheckCircle,
   Clock,
@@ -9,6 +11,7 @@ import {
   Landmark,
   ExternalLink,
   ArrowRight,
+  MessageSquareText,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -17,6 +20,7 @@ interface Props {
   readonly hasComplaint: boolean;
   readonly hasArbitration: boolean;
   readonly hasEscalation?: boolean;
+  readonly responses?: ReadonlyArray<CompanyResponseView>;
   readonly onEscalate?: () => void;
   readonly onFinish: () => void;
 }
@@ -34,9 +38,13 @@ export function CaseTracker({
   hasComplaint,
   hasArbitration,
   hasEscalation,
+  responses = [],
   onEscalate,
   onFinish,
 }: Props) {
+  const hasResponses = responses.length > 0;
+  const latestResponse = hasResponses ? responses[0] : null;
+  const isResolved = latestResponse?.tipo_respuesta === "aceptar";
   const today = new Date().toLocaleDateString("es-AR", {
     day: "numeric",
     month: "short",
@@ -62,9 +70,11 @@ export function CaseTracker({
     },
     {
       label: "Enviado a la empresa",
-      description: "Esperando respuesta de " + analysis.empresa + ".",
-      status: hasComplaint ? "current" : "pending",
-      icon: Clock,
+      description: hasResponses
+        ? `${analysis.empresa} respondió tu reclamo.`
+        : "Esperando respuesta de " + analysis.empresa + ".",
+      status: hasResponses ? "completed" : hasComplaint ? "current" : "pending",
+      icon: hasResponses ? CheckCircle : Clock,
     },
     {
       label: "Mediación IA",
@@ -86,9 +96,12 @@ export function CaseTracker({
     },
     {
       label: "Resolución",
-      description: "Caso resuelto satisfactoriamente.",
-      status: "pending",
+      description: isResolved
+        ? `${analysis.empresa} aceptó tu reclamo.`
+        : "Caso resuelto satisfactoriamente.",
+      status: isResolved ? "completed" : "pending",
       icon: CheckCircle,
+      date: isResolved ? today : undefined,
     },
   ];
 
@@ -118,8 +131,14 @@ export function CaseTracker({
               {analysis.empresa} &mdash; {analysis.producto_servicio}
             </p>
           </div>
-          <div className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-            En proceso
+          <div
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              isResolved
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-blue-100 text-blue-700"
+            }`}
+          >
+            {isResolved ? "Resuelto" : "En proceso"}
           </div>
         </div>
 
@@ -193,6 +212,36 @@ export function CaseTracker({
         </div>
       </div>
 
+      {/* Company responses */}
+      {hasResponses && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <MessageSquareText className="h-5 w-5 text-blue-600" />
+            <h3 className="text-sm font-bold text-slate-800">
+              Respuestas de {analysis.empresa}
+            </h3>
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+              {responses.length}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {responses.map((r, i) => (
+              <CompanyResponseCard
+                key={r.id}
+                response={r}
+                pais={analysis.pais_detectado}
+                index={i}
+              />
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Escalation option */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -236,11 +285,19 @@ export function CaseTracker({
           Próximo paso sugerido
         </p>
         <p className="text-sm text-slate-600">
-          {hasArbitration
-            ? "Presentar la evaluación arbitral ante el organismo de defensa del consumidor para respaldar tu reclamo."
-            : hasComplaint
-              ? "Enviar el reclamo formal a la empresa y esperar respuesta durante 10 días hábiles."
-              : "Generar y enviar tu reclamo formal a la empresa."}
+          {isResolved
+            ? "Tu reclamo fue resuelto. Puedes dar feedback sobre la experiencia."
+            : latestResponse?.tipo_respuesta === "rechazar"
+              ? `${analysis.empresa} rechazó tu reclamo. Considera escalar ante ${analysis.pais_detectado === "MX" ? "PROFECO" : "COPREC"}.`
+              : latestResponse?.tipo_respuesta === "propuesta"
+                ? "Revisá la propuesta de la empresa y decidí si la aceptás o escalás."
+                : latestResponse?.tipo_respuesta === "solicitar_info"
+                  ? "La empresa solicitó más información. Respondé para avanzar con tu reclamo."
+                  : hasArbitration
+                    ? "Presentar la evaluación arbitral ante el organismo de defensa del consumidor para respaldar tu reclamo."
+                    : hasComplaint
+                      ? "Enviar el reclamo formal a la empresa y esperar respuesta durante 10 días hábiles."
+                      : "Generar y enviar tu reclamo formal a la empresa."}
         </p>
       </div>
 

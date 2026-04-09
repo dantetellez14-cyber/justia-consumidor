@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
   Scale,
@@ -14,8 +15,10 @@ import {
   AlertCircle,
   Building2,
   TrendingUp,
+  ChevronDown,
 } from "lucide-react";
-import type { CaseRecord, CaseStatus } from "@/lib/supabase";
+import type { CaseWithResponses, CaseStatus } from "@/lib/supabase";
+import { ResponseIndicator, CompanyResponseCard } from "@/components/company-response-card";
 
 const STATUS_CONFIG: Record<
   CaseStatus,
@@ -68,7 +71,7 @@ function formatCurrency(amount: number, country: string | null): string {
 export default function MisCasosPage() {
   const { isLoaded, isSignedIn } = useUser();
 
-  const { data: cases, error: swrError, isLoading } = useSWR<ReadonlyArray<CaseRecord>>(
+  const { data: cases, error: swrError, isLoading } = useSWR<ReadonlyArray<CaseWithResponses>>(
     isLoaded && isSignedIn ? "/api/cases" : null,
     fetcher,
     {
@@ -77,6 +80,7 @@ export default function MisCasosPage() {
     }
   );
 
+  const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null);
   const loading = !isLoaded || (isSignedIn && isLoading);
   const error = swrError ? (swrError instanceof Error ? swrError.message : "Error al cargar los casos.") : null;
 
@@ -174,18 +178,28 @@ export default function MisCasosPage() {
               const statusCfg = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.consulta_recibida;
               const StatusIcon = statusCfg.icon;
 
+              const hasResponses = c.company_responses.length > 0;
+              const isExpanded = expandedCaseId === c.id;
+
               return (
                 <motion.div
                   key={c.id}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+                  className={`rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md ${
+                    hasResponses ? "cursor-pointer border-slate-200" : "border-slate-200"
+                  }`}
+                  onClick={
+                    hasResponses
+                      ? () => setExpandedCaseId(isExpanded ? null : c.id)
+                      : undefined
+                  }
                 >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
                     {/* Left: case info */}
                     <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCfg.color}`}
                         >
@@ -195,6 +209,12 @@ export default function MisCasosPage() {
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                           {c.pais_detectado === "MX" ? "Mexico" : "Argentina"}
                         </span>
+                        {hasResponses && (
+                          <ResponseIndicator
+                            count={c.company_responses.length}
+                            latestType={c.company_responses[0].tipo_respuesta}
+                          />
+                        )}
                       </div>
 
                       {c.empresa && (
@@ -215,7 +235,7 @@ export default function MisCasosPage() {
                       </p>
                     </div>
 
-                    {/* Right: metrics */}
+                    {/* Right: metrics + expand toggle */}
                     <div className="flex items-center gap-6 sm:text-right">
                       {c.monto_reclamo != null && (
                         <div>
@@ -236,8 +256,42 @@ export default function MisCasosPage() {
                           </div>
                         </div>
                       )}
+                      {hasResponses && (
+                        <ChevronDown
+                          className={`h-5 w-5 text-slate-400 transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      )}
                     </div>
                   </div>
+
+                  {/* Expanded responses */}
+                  <AnimatePresence>
+                    {isExpanded && hasResponses && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-3 border-t border-slate-100 px-5 py-4">
+                          <p className="text-xs font-semibold uppercase text-slate-400">
+                            Respuestas de la empresa
+                          </p>
+                          {c.company_responses.map((r, ri) => (
+                            <CompanyResponseCard
+                              key={r.id}
+                              response={r}
+                              pais={c.pais_detectado}
+                              index={ri}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               );
             })}
