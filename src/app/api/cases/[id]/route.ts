@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -18,6 +19,43 @@ const updateSchema = z.object({
   escalation_date: z.string().optional(),
 }).strict();
 
+/**
+ * Internal helper: update a case by id with ownership check.
+ * Used by PATCH handler and by other server-side routes (e.g., send-complaint).
+ */
+export async function updateCaseById(
+  caseId: string,
+  userId: string,
+  fields: z.infer<typeof updateSchema>
+) {
+  // Verify ownership
+  const { data: existing } = await supabase
+    .from("cases")
+    .select("user_id")
+    .eq("id", caseId)
+    .single();
+
+  if (!existing || existing.user_id !== userId) {
+    return { data: null, error: "forbidden" as const };
+  }
+
+  const { data, error } = await supabase
+    .from("cases")
+    .update({
+      ...fields,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", caseId)
+    .select()
+    .single();
+
+  if (error) {
+    return { data: null, error: "db_error" as const };
+  }
+
+  return { data, error: null };
+}
+
 // PATCH: Update case status or fields
 export async function PATCH(
   request: NextRequest,
@@ -32,6 +70,14 @@ export async function PATCH(
     return NextResponse.json(
       { error: `Demasiadas solicitudes. Intenta en ${resetIn}s.` },
       { status: 429 }
+    );
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesion." },
+      { status: 401 }
     );
   }
 
@@ -55,19 +101,21 @@ export async function PATCH(
     );
   }
 
-  const { data, error } = await supabase
-    .from("cases")
-    .update({
-      ...parsed.data,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single();
+  const result = await updateCaseById(id, userId, parsed.data);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (result.error === "forbidden") {
+    return NextResponse.json(
+      { error: "No tienes permiso para modificar este caso." },
+      { status: 403 }
+    );
   }
 
-  return NextResponse.json(data);
+  if (result.error === "db_error") {
+    return NextResponse.json(
+      { error: "Error al actualizar el caso." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json(result.data);
 }
