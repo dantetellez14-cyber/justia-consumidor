@@ -80,6 +80,35 @@ const RESPONSE_TYPES = [
   { value: "rechazar" as const, label: "Rechazar", icon: XCircle, color: "text-red-600" },
 ];
 
+// ── Verification Banner ──
+
+function normalizeForDisplay(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, "").replace(/[.,\-()]/g, "").slice(0, 20);
+}
+
+function VerificationBanner({ companyName }: { readonly companyName: string }) {
+  const domain = normalizeForDisplay(companyName);
+  return (
+    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="flex items-start gap-3">
+        <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+        <div>
+          <h3 className="text-sm font-bold text-amber-800">
+            Empresa pendiente de verificacion
+          </h3>
+          <p className="mt-1 text-sm text-amber-700">
+            Para habilitar respuestas a reclamos, un empleado con email
+            corporativo (ej: @{domain}.com) debe vincularse desde este portal.
+          </p>
+          <p className="mt-2 text-xs text-amber-600">
+            Mientras tanto, puedes ver tus reclamos y estadisticas en modo lectura.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Registration Form ──
 
 function RegistrationForm({
@@ -602,11 +631,13 @@ function ComplaintList({
 function ComplaintDetail({
   complaint,
   companyId,
+  verificada,
   onBack,
   onResponded,
 }: {
   readonly complaint: CompanyCaseView;
   readonly companyId: string;
+  readonly verificada: boolean;
   readonly onBack: () => void;
   readonly onResponded: () => void;
 }) {
@@ -785,11 +816,13 @@ function ComplaintDetail({
               <button
                 key={rt.value}
                 onClick={() => setSelectedType(rt.value)}
+                disabled={!verificada}
+                title={!verificada ? "Requiere verificacion" : undefined}
                 className={`flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all ${
                   selectedType === rt.value
                     ? "border-emerald-400 bg-emerald-50"
                     : "border-slate-200 hover:border-slate-300"
-                }`}
+                } ${!verificada ? "cursor-not-allowed opacity-50" : ""}`}
               >
                 <rt.icon className={`h-4 w-4 ${rt.color}`} />
                 <span className="text-xs font-medium text-slate-700">
@@ -845,8 +878,9 @@ function ComplaintDetail({
 
           <button
             onClick={handleSendResponse}
-            disabled={!selectedType || mensaje.trim().length < 10 || sending}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
+            disabled={!verificada || !selectedType || mensaje.trim().length < 10 || sending}
+            title={!verificada ? "Requiere verificacion" : undefined}
+            className={`flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 py-3 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50 ${!verificada ? "cursor-not-allowed opacity-50" : ""}`}
           >
             {sending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1003,6 +1037,9 @@ export default function EmpresaPage() {
 
         {!loading && view === "overview" && data?.registered && data.stats && (
           <div className="space-y-6">
+            {data.account && !data.account.verificada && (
+              <VerificationBanner companyName={data.account.nombre} />
+            )}
             <StatsGrid stats={data.stats} />
             <MetricsBar stats={data.stats} />
 
@@ -1035,6 +1072,7 @@ export default function EmpresaPage() {
             <ComplaintDetail
               complaint={selectedComplaint}
               companyId={data.account.id}
+              verificada={data.account.verificada ?? false}
               onBack={() => {
                 setView("overview");
                 setSelectedComplaint(null);
