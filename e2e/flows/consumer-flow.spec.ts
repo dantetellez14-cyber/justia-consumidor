@@ -134,10 +134,13 @@ test.describe("Consumer flow", () => {
   }) => {
     await fillAndSubmitForm(page);
 
-    // Use "Ver mis opciones" shortcut from results to jump directly to tracking
+    // results → complaint: click "Generar carta" button
+    await page.getByRole("button", { name: /generar carta|continuar/i }).click();
+
+    // complaint → tracking: "Ver mis opciones" shortcut is in complaint step
     await expect(
       page.getByRole("button", { name: "Ver mis opciones" })
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Ver mis opciones" }).click();
 
     // Tracking step: click "Finalizar y dar feedback"

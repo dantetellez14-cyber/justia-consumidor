@@ -14,10 +14,16 @@ test.describe("Auth flow", () => {
     await setupClerkTestingToken({ page });
     await page.goto("/mis-casos");
 
-    // Esperar que cargue la lista
+    // Wait for Clerk to load and SWR to fetch — CI can be slow
+    await page.waitForLoadState("networkidle");
+
+    // Check that the authenticated page is visible (not redirect)
+    await expect(page.getByText("Mis Casos")).toBeVisible({ timeout: 25_000 });
+
+    // Cases should appear from MSW mock
     await expect(
       page.getByText(mockCases[0].empresa)
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 25_000 });
     await expect(page.getByText(mockCases[1].empresa)).toBeVisible();
   });
 
@@ -25,10 +31,16 @@ test.describe("Auth flow", () => {
     await setupClerkTestingToken({ page });
     await page.goto("/mis-casos");
 
-    // Hacer click en el primer caso
+    // Wait for cases to load
+    await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByText(mockCases[0].empresa)
+    ).toBeVisible({ timeout: 25_000 });
+
+    // Click the first case
     await page.getByText(mockCases[0].empresa).first().click();
 
-    // Ver detalle
+    // See detail
     await expect(
       page.getByText(mockCases[0].core_grievance)
     ).toBeVisible({ timeout: 10_000 });
