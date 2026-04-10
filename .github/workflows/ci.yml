@@ -38,4 +38,5 @@ jobs:
           CLERK_SECRET_KEY: sk_test_placeholder
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SECRET_KEY: placeholder
           SENTRY_DSN: https://placeholder@sentry.io/0
