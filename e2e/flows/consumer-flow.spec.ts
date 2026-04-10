@@ -35,7 +35,7 @@ test.describe("Consumer flow", () => {
     });
 
     // Probability is displayed as "75%" (0.75 * 100 rounded)
-    await expect(page.getByText("75%")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("75%").first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("analisis → genera carta de reclamo con texto NOTA DE RECLAMO FORMAL", async ({
@@ -153,11 +153,15 @@ test.describe("Consumer flow", () => {
       timeout: 10_000,
     });
 
-    // Click the 4th star (rating = 4) in the star row
-    const starButtons = page.locator("div.flex.justify-center.gap-2 > button");
-    await starButtons.nth(3).click(); // 0-indexed → 4th star
+    // Click the 4th star — motion.button renders as button inside a wrapper span/div
+    // Use force:true to bypass animation state checks
+    const starButtons = page.locator("div.flex.justify-center.gap-2").getByRole("button");
+    await starButtons.nth(3).click({ force: true }); // 0-indexed → 4th star
 
-    await page.getByRole("button", { name: "Enviar Feedback" }).click();
+    // Wait for button to become enabled after rating is set
+    const submitBtn = page.getByRole("button", { name: "Enviar Feedback" });
+    await expect(submitBtn).toBeEnabled({ timeout: 5_000 });
+    await submitBtn.click();
 
     // After submission the thanks screen appears
     await expect(
