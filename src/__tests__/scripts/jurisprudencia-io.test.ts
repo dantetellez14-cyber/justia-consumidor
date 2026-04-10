@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -70,10 +70,12 @@ describe("writeJurisprudenciaJSON", () => {
   it("writes cases as pretty-printed JSON", () => {
     const cases = [makeCase("case-1")];
     writeJurisprudenciaJSON(cases, tmpFile);
-    const raw = require("node:fs").readFileSync(tmpFile, "utf-8");
+    const raw = readFileSync(tmpFile, "utf-8");
     const parsed = JSON.parse(raw);
     expect(parsed).toHaveLength(1);
     expect(parsed[0].expediente_id).toBe("case-1");
+    // file should end with a newline for POSIX compliance
+    expect(raw.endsWith("\n")).toBe(true);
   });
 });
 
