@@ -9,6 +9,7 @@ import { sendComplaintSchema, formatZodError } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
 import { notifyEmpresaNewComplaint } from "@/lib/notifications";
+import { updateCaseById } from "@/app/api/cases/[id]/route";
 
 const log = createRouteLogger("/api/send-complaint");
 
@@ -120,11 +121,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Update case status if we have a caseId
     if (caseId) {
-      await fetch(new URL(`/api/cases/${caseId}`, request.url), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "enviado_empresa" }),
-      });
+      await updateCaseById(caseId, userId, { status: "enviado_empresa" });
     }
 
     // 4. Fire-and-forget: notify empresa via portal (if registered)

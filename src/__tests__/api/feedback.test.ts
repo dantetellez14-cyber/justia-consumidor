@@ -122,6 +122,6 @@ describe("POST /api/feedback", () => {
     const data = await res.json();
 
     expect(res.status).toBe(500);
-    expect(data.error).toBe("DB error");
+    expect(data.error).toBe("Error al guardar el feedback.");
   });
 });

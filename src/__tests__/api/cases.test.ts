@@ -111,7 +111,7 @@ describe("POST /api/cases", () => {
     const data = await res.json();
 
     expect(res.status).toBe(500);
-    expect(data.error).toBe("DB error");
+    expect(data.error).toBe("Error al crear el caso.");
   });
 
   it("returns 400 for malformed JSON body", async () => {
@@ -142,7 +142,7 @@ describe("GET /api/cases", () => {
     const data = await res.json();
 
     expect(res.status).toBe(401);
-    expect(data.error).toContain("sesión");
+    expect(data.error).toContain("sesion");
   });
 
   it("returns 400 for invalid UUID in id param", async () => {

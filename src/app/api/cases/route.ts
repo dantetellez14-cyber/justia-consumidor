@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Error al crear el caso." }, { status: 500 });
   }
 
   return NextResponse.json(data);
@@ -80,6 +80,13 @@ export async function GET(request: NextRequest) {
 
   const { userId } = await auth();
 
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesion para ver tus casos." },
+      { status: 401 }
+    );
+  }
+
   const queryParams = {
     id: request.nextUrl.searchParams.get("id") ?? undefined,
   };
@@ -97,27 +104,20 @@ export async function GET(request: NextRequest) {
   const CASE_WITH_RESPONSES_SELECT =
     "*, company_responses(id, tipo_respuesta, mensaje, propuesta_monto, created_at)";
 
-  // Single case lookup
+  // Single case lookup — filtered by user_id for ownership
   if (caseId) {
     const { data, error } = await supabase
       .from("cases")
       .select(CASE_WITH_RESPONSES_SELECT)
       .eq("id", caseId)
+      .eq("user_id", userId)
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      return NextResponse.json({ error: "Caso no encontrado." }, { status: 404 });
     }
 
     return NextResponse.json(data);
-  }
-
-  // List all cases for the authenticated user
-  if (!userId) {
-    return NextResponse.json(
-      { error: "Debes iniciar sesión para ver tus casos." },
-      { status: 401 }
-    );
   }
 
   const { data, error } = await supabase
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Error al cargar los casos." }, { status: 500 });
   }
 
   return NextResponse.json(data, {

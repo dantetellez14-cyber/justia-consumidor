@@ -16,9 +16,13 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey);
  *
  * NEVER expose this client or SUPABASE_SECRET_KEY to the browser.
  */
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+if (!supabaseSecretKey && typeof window === "undefined") {
+  throw new Error("SUPABASE_SECRET_KEY is required on the server");
+}
 export const supabase = createClient(
   supabaseUrl,
-  process.env.SUPABASE_SECRET_KEY || supabaseAnonKey
+  supabaseSecretKey || supabaseAnonKey
 );
 
 export type CaseStatus =
