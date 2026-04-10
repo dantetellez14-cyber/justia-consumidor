@@ -137,11 +137,13 @@ export async function rateLimit(
   return memoryRateLimit(key, config.limit, config.windowSeconds);
 }
 
-/**
- * Extract a rate-limit key from the request.
- * Uses x-forwarded-for (Vercel proxy), falls back to "anonymous".
- */
 export function getClientIp(request: Request): string {
+  // Use Vercel's real IP header first if available, as x-forwarded-for can be spoofed
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) {
+    return realIp.trim();
+  }
+  
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0].trim();

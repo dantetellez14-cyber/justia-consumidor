@@ -74,6 +74,14 @@ export async function POST(request: NextRequest) {
   const { analysis, nombre, email, empresaEmail, complaintText, caseId } =
     parsed.data;
 
+  const { emailMatchesCompany } = await import("@/lib/empresa");
+  if (!emailMatchesCompany(empresaEmail, analysis.empresa)) {
+    return NextResponse.json(
+      { error: "El dominio del correo no coincide con el nombre de la empresa." },
+      { status: 400 }
+    );
+  }
+
   const results = { complaint: false, confirmation: false };
 
   try {
