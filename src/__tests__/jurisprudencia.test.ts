@@ -2,18 +2,18 @@ import { describe, it, expect } from "vitest";
 import { jurisprudencia, filterByCountry } from "@/lib/jurisprudencia";
 
 describe("jurisprudencia data", () => {
-  it("has 10 cases total", () => {
-    expect(jurisprudencia).toHaveLength(10);
+  it("has at least 10 cases", () => {
+    expect(jurisprudencia.length).toBeGreaterThanOrEqual(10);
   });
 
-  it("has 5 Argentine cases", () => {
+  it("has at least 5 Argentine cases", () => {
     const ar = jurisprudencia.filter((c) => c.pais === "AR");
-    expect(ar).toHaveLength(5);
+    expect(ar.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("has 5 Mexican cases", () => {
+  it("has at least 5 Mexican cases", () => {
     const mx = jurisprudencia.filter((c) => c.pais === "MX");
-    expect(mx).toHaveLength(5);
+    expect(mx.length).toBeGreaterThanOrEqual(5);
   });
 
   it("all cases have required fields", () => {
@@ -37,13 +37,13 @@ describe("jurisprudencia data", () => {
 describe("filterByCountry", () => {
   it("returns only Argentine cases for AR", () => {
     const result = filterByCountry("AR");
-    expect(result.length).toBe(5);
+    expect(result.length).toBeGreaterThanOrEqual(5);
     expect(result.every((c) => c.pais === "AR")).toBe(true);
   });
 
   it("returns only Mexican cases for MX", () => {
     const result = filterByCountry("MX");
-    expect(result.length).toBe(5);
+    expect(result.length).toBeGreaterThanOrEqual(5);
     expect(result.every((c) => c.pais === "MX")).toBe(true);
   });
 

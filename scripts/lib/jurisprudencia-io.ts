@@ -19,7 +19,7 @@ export function readJurisprudenciaJSON(
     const raw = readFileSync(filePath, "utf-8");
     const parsed: unknown = JSON.parse(raw);
     const validated = casesArraySchema.parse(parsed);
-    return validated as JurisprudenciaCaseExtended[];
+    return validated as unknown as JurisprudenciaCaseExtended[];
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[jurisprudencia-io] Could not read ${filePath}: ${message}`);
