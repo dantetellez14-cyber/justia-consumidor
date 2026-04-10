@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { setupClerkTestingToken, clerk } from "@clerk/testing/playwright";
+import { setupClerkTestingToken } from "@clerk/testing/playwright";
 import { mockCases } from "../fixtures/cases";
 
 test.describe("Auth flow", () => {

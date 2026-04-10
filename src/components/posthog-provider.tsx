@@ -7,16 +7,17 @@ import { CookieConsentBanner } from "./cookie-consent-banner";
 
 export function PostHogProvider({ children }: { readonly children: React.ReactNode }) {
   const { userId } = useAuth();
-  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return getStoredConsent() === "accepted";
+  });
 
   // Initialize PostHog only after consent
   useEffect(() => {
-    const stored = getStoredConsent();
-    if (stored === "accepted") {
-      setConsentGiven(true);
+    if (consentGiven) {
       initPostHog();
     }
-  }, []);
+  }, [consentGiven]);
 
   // Identify user when signed in and consent given
   useEffect(() => {
