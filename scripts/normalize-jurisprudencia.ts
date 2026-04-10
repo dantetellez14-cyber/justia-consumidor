@@ -1,0 +1,112 @@
+/**
+ * normalize-jurisprudencia.ts
+ * Reads data/jurisprudencia.json, finds cases with normalizado_por_ia: false,
+ * calls Gemini to fill hechos/ratio_decidendi/categoria/probabilidad_exito/duracion_dias,
+ * writes back the updated JSON.
+ *
+ * Usage:
+ *   npx tsx scripts/normalize-jurisprudencia.ts
+ *
+ * Requires: GEMINI_API_KEY
+ */
+
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  readJurisprudenciaJSON,
+  writeJurisprudenciaJSON,
+} from "./lib/jurisprudencia-io";
+import {
+  buildNormalizePrompt,
+  parseNormalizeResponse,
+} from "./lib/normalize-prompt";
+
+const BATCH_SIZE = 5;
+const DELAY_MS = 2000; // 2s between batches to respect Gemini rate limits
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function main(): Promise<void> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("[normalize] Error: GEMINI_API_KEY is required");
+    process.exit(1);
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  const cases = readJurisprudenciaJSON();
+  const toNormalize = cases.filter((c) => !c.normalizado_por_ia && c.texto_crudo);
+
+  console.log(
+    `[normalize] Found ${toNormalize.length} cases to normalize out of ${cases.length} total`
+  );
+
+  if (toNormalize.length === 0) {
+    console.log("[normalize] Nothing to do.");
+    return;
+  }
+
+  let normalizedCount = 0;
+  let failedCount = 0;
+
+  // Process in batches
+  for (let i = 0; i < toNormalize.length; i += BATCH_SIZE) {
+    const batch = toNormalize.slice(i, i + BATCH_SIZE);
+    console.log(
+      `[normalize] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(toNormalize.length / BATCH_SIZE)} (${batch.length} cases)`
+    );
+
+    await Promise.all(
+      batch.map(async (caseItem) => {
+        try {
+          const prompt = buildNormalizePrompt(caseItem.texto_crudo);
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text();
+          const parsed = parseNormalizeResponse(responseText);
+
+          if (!parsed) {
+            console.warn(
+              `[normalize] Could not parse Gemini response for ${caseItem.expediente_id}`
+            );
+            failedCount++;
+            return;
+          }
+
+          // Update case in-place (we re-read below before writing)
+          caseItem.hechos = parsed.hechos;
+          caseItem.ratio_decidendi = parsed.ratio_decidendi;
+          caseItem.categoria = parsed.categoria;
+          caseItem.probabilidad_exito = parsed.probabilidad_exito;
+          caseItem.duracion_dias = parsed.duracion_dias;
+          caseItem.normalizado_por_ia = true;
+          normalizedCount++;
+        } catch (err) {
+          console.warn(
+            `[normalize] Gemini error for ${caseItem.expediente_id}:`,
+            err instanceof Error ? err.message : err
+          );
+          failedCount++;
+        }
+      })
+    );
+
+    // Write progress after each batch so partial progress is saved
+    writeJurisprudenciaJSON(cases);
+
+    if (i + BATCH_SIZE < toNormalize.length) {
+      await sleep(DELAY_MS);
+    }
+  }
+
+  console.log(
+    `[normalize] Done. Normalized: ${normalizedCount}, Failed: ${failedCount}`
+  );
+}
+
+main().catch((err) => {
+  console.error("[normalize] Fatal error:", err);
+  process.exit(1);
+});
