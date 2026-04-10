@@ -134,6 +134,9 @@ test.describe("Consumer flow", () => {
   }) => {
     await fillAndSubmitForm(page);
 
+    // Wait for analysis results to appear before navigating
+    await expect(page.getByText(mockAnalysis.empresa)).toBeVisible({ timeout: 15_000 });
+
     // results → complaint: click "Generar carta" button
     await page.getByRole("button", { name: /generar carta|continuar/i }).click();
 
