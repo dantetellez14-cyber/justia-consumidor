@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAnalysis } from "../fixtures/analysis";
 
 // Helper: navigate from welcome to the analyze form and submit it
 async function fillAndSubmitForm(page: Page) {
@@ -134,13 +135,10 @@ test.describe("Consumer flow", () => {
   }) => {
     await fillAndSubmitForm(page);
 
-    // Wait for analysis results to appear before navigating
+    // Wait for analysis results to appear
     await expect(page.getByText(mockAnalysis.empresa)).toBeVisible({ timeout: 15_000 });
 
-    // results → complaint: click "Generar carta" button
-    await page.getByRole("button", { name: /generar carta|continuar/i }).click();
-
-    // complaint → tracking: "Ver mis opciones" shortcut is in complaint step
+    // results → tracking: "Ver mis opciones" skips complaint and goes straight to tracking
     await expect(
       page.getByRole("button", { name: "Ver mis opciones" })
     ).toBeVisible({ timeout: 10_000 });

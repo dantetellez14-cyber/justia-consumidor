@@ -12,6 +12,7 @@ export const mockCases = [
     pais_detectado: "AR",
     status: "enviado_empresa",
     created_at: "2026-01-20T10:00:00.000Z",
+    company_responses: [],
   },
   {
     id: "test-case-uuid-2",
@@ -26,5 +27,6 @@ export const mockCases = [
     pais_detectado: "AR",
     status: "consulta_recibida",
     created_at: "2026-02-05T14:30:00.000Z",
+    company_responses: [],
   },
 ];
