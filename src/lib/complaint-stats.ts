@@ -238,7 +238,7 @@ export async function fetchProfecoCatalog(
 ): Promise<ReadonlyArray<string> | null> {
   try {
     const response = await fetch(
-      `${PROFECO_API_BASE}/catalogo.php?catalogo=${catalogName}&pageSize=500`,
+      `${PROFECO_API_BASE}/catalogo.php?catalogo=${encodeURIComponent(catalogName)}&pageSize=500`,
       { signal: AbortSignal.timeout(10000) }
     );
 

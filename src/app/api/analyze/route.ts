@@ -4,7 +4,26 @@ import { logError, createRouteLogger } from "@/lib/logger";
 
 const log = createRouteLogger("/api/analyze");
 
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const RAW_OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+
+// Guard against SSRF: only allow connections to localhost / 127.0.0.1
+function validateOllamaUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    const hostname = parsed.hostname;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      throw new Error(`OLLAMA_URL must point to localhost, got: ${hostname}`);
+    }
+    return raw;
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error(`OLLAMA_URL is not a valid URL: ${raw}`);
+    }
+    throw err;
+  }
+}
+
+const OLLAMA_URL = validateOllamaUrl(RAW_OLLAMA_URL);
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "gemma2:9b";
 
 const SYSTEM_PROMPT = `Actúa como un experto legal en derecho del consumo de Argentina y México.

@@ -27,6 +27,10 @@ export const logger = pino({
       "secret",
       "token",
       "apiKey",
+      // PII fields
+      "email",
+      "nombre",
+      "relato",
     ],
     censor: "[REDACTED]",
   },
