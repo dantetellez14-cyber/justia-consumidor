@@ -9,7 +9,7 @@ import { sendComplaintSchema, formatZodError } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
 import { notifyEmpresaNewComplaint } from "@/lib/notifications";
-import { updateCaseById } from "@/app/api/cases/[id]/route";
+import { updateCaseById } from "@/lib/cases-utils";
 
 const log = createRouteLogger("/api/send-complaint");
 

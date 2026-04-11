@@ -1,7 +1,7 @@
 import type { JurisprudenciaCategoria } from "../../src/lib/types";
 
 const VALID_CATEGORIES: JurisprudenciaCategoria[] = [
-  "telefonia_movil", "telefonia_fija", "internet", "television_paga",
+  "telefonica_movil", "telefonica_fija", "internet", "television_paga",
   "correo_y_paqueteria", "banca", "tarjetas_credito_debito", "prestamos_y_creditos",
   "seguros", "fintech_y_billeteras_digitales", "ecommerce", "electrodomesticos",
   "electronica_y_celulares", "indumentaria_y_calzado", "alimentos_y_bebidas",

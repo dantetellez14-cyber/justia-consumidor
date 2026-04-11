@@ -1,0 +1,94 @@
+name: Jurisprudencia Pipeline
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Every Monday at 6am UTC
+  workflow_dispatch:        # Also triggerable manually from GitHub UI
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scrape public sources
+        run: npm run scrape:jurisprudencia
+        env:
+          NODE_ENV: production
+
+      - name: Normalize with Gemini
+        run: npm run normalize:jurisprudencia
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Seed Pinecone (incremental)
+        run: npm run seed:jurisprudencia
+        env:
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PINECONE_INDEX_NAME: justia-jurisprudencia
+
+      - name: Check for new cases
+        id: diff
+        run: |
+          git diff --name-only | grep "data/jurisprudencia.json" && echo "changed=true" >> $GITHUB_OUTPUT || echo "changed=false" >> $GITHUB_OUTPUT
+
+      - name: Create PR with new cases
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          BRANCH="jurisprudencia/${DATE}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add data/jurisprudencia.json
+          TOTAL=$(node -e "const f=require('./data/jurisprudencia.json'); console.log(f.length)")
+          NEW=$(git diff --cached -- data/jurisprudencia.json | grep '^+' | grep 'expediente_id' | wc -l | tr -d ' ')
+          git commit -m "feat(jurisprudencia): +${NEW} casos nuevos (${DATE})"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "feat(jurisprudencia): +${NEW} casos nuevos (${DATE})" \
+            --body "## Jurisprudencia Update — ${DATE}
+
+          Pipeline semanal encontró **${NEW} casos nuevos** de fuentes públicas AR/MX.
+          Total en el índice: **${TOTAL} casos**.
+
+          ### Fuentes consultadas
+          - 🇦🇷 SAIJ (jurisprudencia.gob.ar)
+          - 🇦🇷 Boletín Oficial (disposiciones Ley 24.240)
+          - 🇦🇷 CSJN Suplemento Consumidor
+          - 🇦🇷 DESCAjus / JURISTECA (Tribunal Consumo CABA)
+          - 🇲🇽 SJF2 (tesis jurisprudenciales SCJN)
+          - 🇲🇽 Buscador Jurídico SCJN
+
+          ### Revisión
+          - [ ] Revisar \`data/jurisprudencia.json\` en la pestaña **Files changed**
+          - [ ] Verificar que los \`hechos\` y \`ratio_decidendi\` estén correctamente normalizados
+          - [ ] Aprobar y mergear cuando el contenido sea correcto
+
+          🤖 Generado automáticamente por el pipeline de jurisprudencia" \
+            --base main \
+            --head "$BRANCH"
+
+      - name: No new cases found
+        if: steps.diff.outputs.changed != 'true'
+        run: echo "[pipeline] No new cases found this week. Nothing to do."
