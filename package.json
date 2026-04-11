@@ -11,9 +11,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "scrape:jurisprudencia": "npx tsx --env-file=.env.local scripts/scrape-jurisprudencia.ts",
-    "normalize:jurisprudencia": "npx tsx --env-file=.env.local scripts/normalize-jurisprudencia.ts",
-    "seed:jurisprudencia": "npx tsx --env-file=.env.local scripts/seed-pinecone.ts --incremental",
+    "scrape:jurisprudencia": "npx tsx scripts/scrape-jurisprudencia.ts",
+    "normalize:jurisprudencia": "npx tsx scripts/normalize-jurisprudencia.ts",
+    "seed:jurisprudencia": "npx tsx scripts/seed-pinecone.ts --incremental",
     "pipeline:jurisprudencia": "npm run scrape:jurisprudencia && npm run normalize:jurisprudencia && npm run seed:jurisprudencia"
   },
   "dependencies": {

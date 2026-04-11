@@ -9,6 +9,9 @@
  * Requires: PINECONE_API_KEY
  */
 
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
 import { Pinecone } from "@pinecone-database/pinecone";
 import { readJurisprudenciaJSON } from "./lib/jurisprudencia-io";
 import { buildVectorId, getNewCasesForPinecone } from "./lib/pinecone-helpers";

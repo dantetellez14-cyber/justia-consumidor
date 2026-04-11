@@ -10,6 +10,9 @@
  * Requires: GEMINI_API_KEY
  */
 
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   readJurisprudenciaJSON,
