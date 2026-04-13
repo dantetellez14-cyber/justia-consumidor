@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const cases = readJurisprudenciaJSON();
   const toNormalize = cases.filter((c) => !c.normalizado_por_ia && c.texto_crudo);
