@@ -23,8 +23,8 @@ import {
   parseNormalizeResponse,
 } from "./lib/normalize-prompt";
 
-const BATCH_SIZE = 5;
-const DELAY_MS = 2000; // 2s between batches to respect Gemini rate limits
+const BATCH_SIZE = 1;
+const DELAY_MS = 15000; // 15s between requests to respect Gemini 5 requests-per-minute limit
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
