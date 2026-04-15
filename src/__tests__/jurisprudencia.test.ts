@@ -16,15 +16,25 @@ describe("jurisprudencia data", () => {
     expect(mx.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("all cases have required fields", () => {
+  it("all cases have base required fields", () => {
     for (const c of jurisprudencia) {
       expect(c.expediente_id).toBeTruthy();
+      expect(["AR", "MX"]).toContain(c.pais);
+      // Every case must have at least raw text to be normalizable
+      expect(c.texto_crudo).toBeTruthy();
+    }
+  });
+
+  it("normalized cases have AI-populated fields", () => {
+    const normalized = jurisprudencia.filter((c) => c.normalizado_por_ia);
+    // At least the original 10 hand-curated cases must remain normalized
+    expect(normalized.length).toBeGreaterThanOrEqual(5);
+    for (const c of normalized) {
       expect(c.hechos).toBeTruthy();
       expect(c.ratio_decidendi).toBeTruthy();
       expect(c.probabilidad_exito).toBeGreaterThan(0);
       expect(c.probabilidad_exito).toBeLessThanOrEqual(1);
       expect(c.duracion_dias).toBeGreaterThan(0);
-      expect(["AR", "MX"]).toContain(c.pais);
     }
   });
 
