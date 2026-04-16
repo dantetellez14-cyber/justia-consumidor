@@ -1,168 +1,475 @@
-import React from 'react';
-import { Bell, Settings, LogOut, Search, Building2, TrendingUp, AlertTriangle, Scale, Shield, BarChart3, ArrowRight, Activity, ArrowUpRight } from 'lucide-react';
+"use client";
+
+import { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Search,
+  Building2,
+  Scale,
+  Shield,
+  BarChart3,
+  ChevronRight,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
+  Users,
+  ArrowLeft,
+} from "lucide-react";
+import Link from "next/link";
+import useSWR from "swr";
+import {
+  getLevelLabel,
+  getScoreBgColor,
+  getScoreRingColor,
+} from "@/lib/reputation-score";
+import type { EmpresaRanking } from "@/app/api/empresas/route";
+
+// ── Fetcher ───────────────────────────────────────────────────────────────────
+
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error("Error al cargar empresas");
+    return r.json();
+  });
+
+function buildUrl(pais: string, search: string): string {
+  const params = new URLSearchParams({ pais, limit: "30" });
+  if (search.trim()) params.set("search", search.trim());
+  return `/api/empresas?${params.toString()}`;
+}
+
+// ── Score badge ───────────────────────────────────────────────────────────────
+
+function ScoreBadge({
+  score,
+  level,
+}: {
+  score: number;
+  level: string;
+}) {
+  const bg = getScoreBgColor(level as Parameters<typeof getScoreBgColor>[0]);
+  const label = getLevelLabel(level as Parameters<typeof getLevelLabel>[0]);
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div
+        className={`w-14 h-14 rounded-full ${bg} flex items-center justify-center text-white font-bold text-xl shadow-lg`}
+      >
+        {score.toFixed(1)}
+      </div>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ── Dimension bar ─────────────────────────────────────────────────────────────
+
+function DimBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.round((value / 10) * 100);
+  const color =
+    value >= 7
+      ? "bg-emerald-500"
+      : value >= 5
+        ? "bg-amber-500"
+        : "bg-red-500";
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-24 text-xs text-slate-400 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <motion.div
+          className={`h-full ${color} rounded-full`}
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
+      </div>
+      <span className="w-6 text-xs text-slate-400 text-right">{value}</span>
+    </div>
+  );
+}
+
+// ── Company card ──────────────────────────────────────────────────────────────
+
+function EmpresaCard({
+  empresa,
+  index,
+}: {
+  empresa: EmpresaRanking;
+  index: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const totalQuejas =
+    empresa.total_casos_plataforma + (empresa.total_quejas_oficiales ?? 0);
+  const ring = empresa.reputation
+    ? getScoreRingColor(
+        empresa.reputation.level as Parameters<typeof getScoreRingColor>[0]
+      )
+    : "ring-slate-700";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className={`bg-[#1e293b] border border-slate-700/60 rounded-2xl overflow-hidden ring-1 ${ring}`}
+    >
+      {/* Card header */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full p-5 flex items-center gap-5 hover:bg-slate-800/40 transition-colors text-left"
+      >
+        {/* Rank */}
+        <span className="text-2xl font-bold text-slate-600 w-8 shrink-0">
+          {index + 1}
+        </span>
+
+        {/* Company icon */}
+        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+          <Building2 size={18} className="text-indigo-400" />
+        </div>
+
+        {/* Name + sector */}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-white truncate">{empresa.empresa}</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {empresa.sector ?? "Sin sector"} ·{" "}
+            <span className="font-medium text-slate-400">{empresa.pais}</span>
+          </p>
+        </div>
+
+        {/* Quick stats */}
+        <div className="hidden sm:flex items-center gap-6 mr-4">
+          <div className="text-center">
+            <p className="text-lg font-bold text-white">{totalQuejas.toLocaleString("es")}</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Quejas</p>
+          </div>
+          {empresa.tasa_resolucion !== null && (
+            <div className="text-center">
+              <p className="text-lg font-bold text-white">
+                {(empresa.tasa_resolucion * 100).toFixed(0)}%
+              </p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Resolución</p>
+            </div>
+          )}
+        </div>
+
+        {/* Score */}
+        {empresa.reputation ? (
+          <ScoreBadge
+            score={empresa.reputation.score}
+            level={empresa.reputation.level}
+          />
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-slate-700 flex items-center justify-center text-slate-500 text-xs">
+            N/D
+          </div>
+        )}
+
+        <ChevronRight
+          size={16}
+          className={`text-slate-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
+        />
+      </button>
+
+      {/* Expanded detail */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-5 border-t border-slate-700/60 pt-4 space-y-4">
+              {/* Veredicto */}
+              {empresa.reputation?.veredicto && (
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  {empresa.reputation.veredicto}
+                </p>
+              )}
+
+              {/* Dimension bars */}
+              {empresa.reputation && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                    Dimensiones del Score
+                  </p>
+                  <DimBar
+                    label="Resolución"
+                    value={empresa.reputation.dimensions.resolucion}
+                  />
+                  <DimBar
+                    label="Recuperación"
+                    value={empresa.reputation.dimensions.recuperacion}
+                  />
+                  <DimBar
+                    label="Volumen"
+                    value={empresa.reputation.dimensions.volumen}
+                  />
+                  <DimBar
+                    label="Resultado"
+                    value={empresa.reputation.dimensions.resultado}
+                  />
+                </div>
+              )}
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <StatChip
+                  label="En plataforma"
+                  value={empresa.total_casos_plataforma.toString()}
+                  icon={<Activity size={12} />}
+                />
+                {empresa.total_quejas_oficiales !== null && (
+                  <StatChip
+                    label="Quejas oficiales"
+                    value={empresa.total_quejas_oficiales.toLocaleString("es")}
+                    icon={<Users size={12} />}
+                  />
+                )}
+                {empresa.probabilidad_exito_promedio !== null && (
+                  <StatChip
+                    label="Éxito esperado"
+                    value={`${(empresa.probabilidad_exito_promedio * 100).toFixed(0)}%`}
+                    icon={<TrendingUp size={12} />}
+                  />
+                )}
+                {empresa.monto_reclamo_promedio !== null && (
+                  <StatChip
+                    label="Monto promedio"
+                    value={`$${empresa.monto_reclamo_promedio.toLocaleString("es")}`}
+                    icon={<BarChart3 size={12} />}
+                  />
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="bg-slate-800/60 rounded-lg p-3">
+      <div className="flex items-center gap-1 text-slate-500 mb-1">
+        {icon}
+        <span className="text-[10px] uppercase tracking-wider">{label}</span>
+      </div>
+      <p className="text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+// ── Skeleton loader ───────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="bg-[#1e293b] border border-slate-700/60 rounded-2xl p-5 flex items-center gap-5 animate-pulse">
+      <div className="w-8 h-6 bg-slate-700 rounded" />
+      <div className="w-10 h-10 rounded-xl bg-slate-700 shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 bg-slate-700 rounded w-40" />
+        <div className="h-3 bg-slate-700/60 rounded w-24" />
+      </div>
+      <div className="w-14 h-14 rounded-full bg-slate-700" />
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+type PaisFilter = "both" | "AR" | "MX";
 
 export default function ExploradorEmpresas() {
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pais, setPais] = useState<PaisFilter>("both");
+
+  // Debounce search input by 400 ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const url = buildUrl(pais, debouncedSearch);
+  const { data, error, isLoading } = useSWR<{ empresas: EmpresaRanking[]; total: number }>(
+    url,
+    fetcher,
+    { keepPreviousData: true }
+  );
+
+  const empresas = data?.empresas ?? [];
+
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchInput(e.target.value);
+    },
+    []
+  );
+
   return (
-    <div className="flex h-screen bg-[#0f172a] text-slate-300 font-sans">
-      
-      {/* Sidebar - Minimized Version */}
-      <div className="w-20 bg-[#1e293b] border-r border-slate-800 flex flex-col items-center py-6 justify-between">
-        <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+    <div className="flex min-h-screen bg-[#0f172a] text-slate-300 font-sans">
+      {/* Sidebar */}
+      <div className="w-20 bg-[#1e293b] border-r border-slate-800 flex flex-col items-center py-6 justify-between shrink-0">
+        <Link
+          href="/"
+          className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-500/20"
+          title="Volver al inicio"
+        >
           <Scale size={20} />
-        </div>
+        </Link>
         <nav className="flex flex-col gap-8">
-          <a href="#" className="p-3 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><Shield size={22} /></a>
-          <a href="#" className="p-3 text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-xl transition-colors"><Building2 size={22} /></a>
-          <a href="#" className="p-3 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><BarChart3 size={22} /></a>
+          <Link
+            href="/"
+            className="p-3 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+            title="Inicio"
+          >
+            <Shield size={22} />
+          </Link>
+          <div className="p-3 text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+            <Building2 size={22} />
+          </div>
+          <Link
+            href="/mis-casos"
+            className="p-3 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+            title="Mis casos"
+          >
+            <BarChart3 size={22} />
+          </Link>
         </nav>
-        <div className="flex flex-col gap-6">
-          <button className="text-slate-500 hover:text-white transition-colors"><Settings size={22} /></button>
-          <button className="text-slate-500 hover:text-rose-400 transition-colors"><LogOut size={22} /></button>
-        </div>
+        <Link
+          href="/"
+          className="p-3 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+          title="Volver"
+        >
+          <ArrowLeft size={22} />
+        </Link>
       </div>
 
-      {/* Main Content */}
+      {/* Main content */}
       <div className="flex-1 overflow-auto">
         {/* Header */}
         <header className="h-20 flex items-center justify-between px-10 border-b border-slate-800 bg-[#0f172a]/95 backdrop-blur-md sticky top-0 z-10">
           <div className="flex flex-col">
-            <h2 className="text-sm font-bold text-indigo-400 tracking-widest uppercase">Global Database</h2>
-            <h1 className="text-2xl text-white font-light">Corporate Reputation Index</h1>
+            <h2 className="text-sm font-bold text-indigo-400 tracking-widest uppercase">
+              Base Global
+            </h2>
+            <h1 className="text-2xl text-white font-light">
+              Índice de Reputación Corporativa
+            </h1>
           </div>
-          
+
           <div className="flex items-center gap-6">
+            {/* Live indicator */}
             <div className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-full border border-emerald-400/20 flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-              PINECONE VECTORS: LIVE
-            </div>
-            <div className="w-10 h-10 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center overflow-hidden">
-               <img src="https://i.pravatar.cc/100?img=11" alt="Avatar" className="w-full h-full object-cover"/>
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              {isLoading ? "Actualizando..." : `${empresas.length} empresas`}
             </div>
           </div>
         </header>
 
-        <main className="p-10 max-w-6xl mx-auto">
-          {/* Search Bar */}
-          <div className="relative mb-12 group">
-            <div className="absolute inset-0 bg-indigo-500/20 blur-xl group-hover:bg-indigo-500/30 transition-all rounded-2xl"></div>
-            <div className="relative bg-[#1e293b] border border-slate-700 focus-within:border-indigo-500 rounded-2xl flex items-center px-6 py-4 shadow-2xl transition-all">
-              <Search className="text-indigo-400 mr-4" size={28} />
-              <input 
-                type="text" 
-                placeholder="Search corporation (e.g., Aeromexico, Fravega, Telcel)..." 
-                className="bg-transparent w-full outline-none text-xl text-white placeholder-slate-500"
-                defaultValue="Aerolineas Nacionales"
-              />
-              <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-medium text-sm transition-colors border border-indigo-400/30">
-                Analyze Entity
-              </button>
+        <main className="p-8 max-w-4xl mx-auto">
+          {/* Search + filter row */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-8">
+            {/* Search */}
+            <div className="relative flex-1 group">
+              <div className="absolute inset-0 bg-indigo-500/10 blur-xl group-focus-within:bg-indigo-500/20 transition-all rounded-2xl pointer-events-none" />
+              <div className="relative bg-[#1e293b] border border-slate-700 focus-within:border-indigo-500 rounded-2xl flex items-center px-5 py-3.5 shadow-xl transition-all">
+                <Search className="text-indigo-400 mr-3 shrink-0" size={20} />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={handleSearchChange}
+                  placeholder="Buscar empresa (ej. Aeromexico, Telcel, Fravega)…"
+                  className="bg-transparent w-full outline-none text-base text-white placeholder-slate-500"
+                />
+                {searchInput && (
+                  <button
+                    onClick={() => setSearchInput("")}
+                    className="text-slate-500 hover:text-white text-xs ml-2"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Country toggle */}
+            <div className="flex bg-[#1e293b] border border-slate-700 rounded-2xl overflow-hidden">
+              {(["both", "AR", "MX"] as PaisFilter[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPais(p)}
+                  className={`px-5 py-3.5 text-sm font-medium transition-colors ${
+                    pais === p
+                      ? "bg-indigo-600 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                >
+                  {p === "both" ? "Todos" : p}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-8">
-            
-            {/* Main Entity Card */}
-            <div className="col-span-8 bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-slate-700/50 rounded-3xl p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Building2 size={200} className="text-indigo-500" />
-              </div>
-              
-              <div className="flex items-start justify-between relative z-10 mb-10">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-4xl text-white font-light">Aerolineas Nacionales</h2>
-                    <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs px-2 py-1 rounded-md font-bold tracking-wider">HGI RISK</span>
-                  </div>
-                  <p className="text-slate-400">Sector: Transporte Aéreo y Turismo Comercial</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-slate-500 mb-1 tracking-wider uppercase">Casos Analizados</div>
-                  <div className="text-3xl font-light text-white">4,281</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-6 relative z-10">
-                {/* Metric Circular */}
-                <div className="bg-[#0f172a]/50 border border-slate-800 rounded-2xl p-6 flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm text-slate-400 mb-1">Consumer Win Rate</h4>
-                    <p className="text-3xl text-emerald-400 font-light flex items-center gap-2">
-                       92.4% <ArrowUpRight size={24} className="text-emerald-500/50" />
-                    </p>
-                  </div>
-                  {/* Fake Circular Progress */}
-                  <div className="w-20 h-20 rounded-full border-[6px] border-slate-800 border-t-emerald-400 border-r-emerald-400 border-b-emerald-400 flex items-center justify-center transform -rotate-45">
-                     <span className="transform rotate-45 text-slate-500"><TrendingUp size={20} /></span>
-                  </div>
-                </div>
-
-                {/* Metric Linear */}
-                <div className="bg-[#0f172a]/50 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
-                  <h4 className="text-sm text-slate-400 mb-2">Avg. Resolution Time</h4>
-                  <div className="flex items-baseline gap-2 mb-3">
-                     <span className="text-3xl text-amber-400 font-light">68</span>
-                     <span className="text-slate-500">days</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-400 rounded-full" style={{width: '65%'}}></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <button className="w-full mt-8 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium py-4 rounded-xl flex items-center justify-center gap-2 transition-colors relative z-10 group">
-                <Shield size={18} className="text-indigo-400 group-hover:text-indigo-300" />
-                Initiate Arbitration Proceeding
-                <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
-              </button>
+          {/* Results */}
+          {error && (
+            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 text-red-400">
+              <AlertTriangle size={18} />
+              <span className="text-sm">
+                No se pudo cargar el ranking. Intenta de nuevo.
+              </span>
             </div>
+          )}
 
-            {/* Sidebar Stats */}
-            <div className="col-span-4 flex flex-col gap-6">
-              
-              <div className="bg-[#1e293b] border border-slate-800 rounded-3xl p-6">
-                <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-6 flex items-center gap-2">
-                  <Activity size={16} className="text-rose-400" />
-                  Top Defense Tactics
-                </h3>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-200">Políticas Internas (No Reembolso)</span>
-                      <span className="text-slate-400">45%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-800 rounded-full"><div className="h-full bg-indigo-500 rounded-full" style={{width:'45%'}}></div></div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-200">Culpar a terceros (Clima/Banco)</span>
-                      <span className="text-slate-400">28%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-800 rounded-full"><div className="h-full bg-indigo-500 rounded-full" style={{width:'28%'}}></div></div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-200">Ignorar Notificaciones</span>
-                      <span className="text-slate-400">15%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-800 rounded-full"><div className="h-full bg-indigo-500 rounded-full" style={{width:'15%'}}></div></div>
-                  </div>
-                </div>
+          <div className="space-y-3">
+            {isLoading && empresas.length === 0
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))
+              : empresas.map((e, i) => (
+                  <EmpresaCard key={`${e.empresa}::${e.pais}`} empresa={e} index={i} />
+                ))}
+
+            {!isLoading && !error && empresas.length === 0 && (
+              <div className="text-center py-20">
+                <Building2 size={48} className="text-slate-700 mx-auto mb-4" />
+                <p className="text-slate-500">
+                  {debouncedSearch
+                    ? `No se encontraron empresas para "${debouncedSearch}"`
+                    : "No hay datos de empresas disponibles aún."}
+                </p>
+                {debouncedSearch && (
+                  <button
+                    onClick={() => setSearchInput("")}
+                    className="mt-4 text-sm text-indigo-400 hover:text-indigo-300"
+                  >
+                    Limpiar búsqueda
+                  </button>
+                )}
               </div>
-
-              <div className="bg-[#1e293b] border border-slate-800 rounded-3xl p-6 flex-1 flex flex-col justify-center items-center text-center">
-                 <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-400 mb-4">
-                   <Shield size={24} />
-                 </div>
-                 <h4 className="text-white font-medium mb-2">Consumer Protection Law</h4>
-                 <p className="text-sm text-slate-400 leading-relaxed">
-                   Entities in this sector historically fail to prove *"force majeure"* causes in 9 out of 10 aviation cases according to Pinecone intelligence.
-                 </p>
-              </div>
-
-            </div>
-
+            )}
           </div>
+
+          {/* Footer note */}
+          {empresas.length > 0 && (
+            <p className="text-center text-xs text-slate-600 mt-8">
+              Datos combinados de PROFECO, Defensa del Consumidor y casos en plataforma.
+              Scores calculados con el algoritmo JustIA — actualizado cada 5 minutos.
+            </p>
+          )}
         </main>
       </div>
     </div>
