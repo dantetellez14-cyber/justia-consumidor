@@ -1,19 +1,19 @@
 /**
  * seed-pinecone.ts
- * Upserts jurisprudencia cases from data/jurisprudencia.json into Pinecone.
+ * Upserts jurisprudencia cases from Supabase into Pinecone.
  *
  * Usage:
- *   npx tsx scripts/seed-pinecone.ts              # full re-seed (all cases)
+ *   npx tsx scripts/seed-pinecone.ts              # full re-seed (all valid cases)
  *   npx tsx scripts/seed-pinecone.ts --incremental # only new cases not yet indexed
  *
- * Requires: PINECONE_API_KEY
+ * Requires: PINECONE_API_KEY + Supabase env vars
  */
 
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
 import { Pinecone } from "@pinecone-database/pinecone";
-import { readJurisprudenciaJSON } from "./lib/jurisprudencia-io";
+import { readJurisprudenciaDB } from "./lib/jurisprudencia-io";
 import { buildVectorId, getNewCasesForPinecone } from "./lib/pinecone-helpers";
 import type { JurisprudenciaCaseExtended } from "../src/lib/types";
 
@@ -41,10 +41,6 @@ async function ensureIndex(pc: Pinecone): Promise<void> {
 async function getExistingIds(pc: Pinecone): Promise<Set<string>> {
   try {
     const index = pc.index(PINECONE_INDEX_NAME);
-    const stats = await index.describeIndexStats();
-    // Pinecone doesn't have a simple listAll — use describe stats to check count
-    // For real ID diff, we rely on the JSON being source of truth
-    // Use listPaginated if available (Pinecone v3+)
     const ids = new Set<string>();
     let paginationToken: string | undefined;
     do {
@@ -60,7 +56,10 @@ async function getExistingIds(pc: Pinecone): Promise<Set<string>> {
     console.log(`[seed] Found ${ids.size} existing vectors in Pinecone`);
     return ids;
   } catch (err) {
-    console.warn("[seed] Could not list existing IDs, will upsert all:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[seed] Could not list existing IDs, will upsert all:",
+      err instanceof Error ? err.message : err
+    );
     return new Set();
   }
 }
@@ -104,11 +103,12 @@ async function upsertCases(
     };
   });
 
-  // Upsert in batches of 100
   const BATCH = 100;
   for (let i = 0; i < vectors.length; i += BATCH) {
     await index.upsert({ records: vectors.slice(i, i + BATCH) });
-    console.log(`[seed] Upserted batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(vectors.length / BATCH)}`);
+    console.log(
+      `[seed] Upserted batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(vectors.length / BATCH)}`
+    );
   }
 }
 
@@ -121,8 +121,8 @@ async function main(): Promise<void> {
   const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
   await ensureIndex(pc);
 
-  const allCases = readJurisprudenciaJSON();
-  console.log(`[seed] Loaded ${allCases.length} cases from data/jurisprudencia.json`);
+  const allCases = await readJurisprudenciaDB();
+  console.log(`[seed] Loaded ${allCases.length} cases from Supabase`);
 
   if (INCREMENTAL) {
     const existingIds = await getExistingIds(pc);

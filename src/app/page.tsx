@@ -7,7 +7,7 @@ import { UserButton, useAuth } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
 import { calculateFinancialMetrics } from "@/lib/scoring";
-import { filterByCountry } from "@/lib/jurisprudencia";
+import { fetchCasesByCountry } from "@/lib/jurisprudencia";
 import { WelcomeHero } from "@/components/welcome-hero";
 import { ComplaintForm } from "@/components/complaint-form";
 import type { ComplaintFormData } from "@/components/complaint-form";
@@ -165,10 +165,14 @@ export default function Home() {
           if (searchData.cases && searchData.cases.length > 0) {
             setRelevantCases(searchData.cases);
           } else {
-            setRelevantCases(filterByCountry(enrichedAnalysis.pais_detectado));
+            setRelevantCases(
+              await fetchCasesByCountry(enrichedAnalysis.pais_detectado)
+            );
           }
         } catch {
-          setRelevantCases(filterByCountry(enrichedAnalysis.pais_detectado));
+          setRelevantCases(
+            await fetchCasesByCountry(enrichedAnalysis.pais_detectado)
+          );
         }
 
         markCompleted("analyze");

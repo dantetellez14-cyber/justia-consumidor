@@ -1,6 +1,6 @@
 /**
  * scrape-jurisprudencia.ts
- * Orchestrates all source scrapers and merges new cases into data/jurisprudencia.json.
+ * Orchestrates all source scrapers and merges new cases into Supabase.
  *
  * Usage:
  *   npx tsx scripts/scrape-jurisprudencia.ts
@@ -8,7 +8,14 @@
  * No API keys required — only fetches from public portals.
  */
 
-import { readJurisprudenciaJSON, writeJurisprudenciaJSON, mergeNewCases } from "./lib/jurisprudencia-io";
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
+import {
+  readJurisprudenciaDB,
+  mergeNewCases,
+  upsertCasesToDB,
+} from "./lib/jurisprudencia-io";
 import { scrapeAR_SAIJ } from "./lib/scrapers/ar-saij";
 import { scrapeAR_BoletinOficial } from "./lib/scrapers/ar-boletin";
 import { scrapeAR_CSJN } from "./lib/scrapers/ar-csjn";
@@ -19,8 +26,8 @@ import { scrapeMX_SCJN } from "./lib/scrapers/mx-scjn";
 async function main(): Promise<void> {
   console.log("[scrape] Starting jurisprudencia pipeline...");
 
-  const existing = readJurisprudenciaJSON();
-  console.log(`[scrape] Loaded ${existing.length} existing cases from data/jurisprudencia.json`);
+  const existing = await readJurisprudenciaDB();
+  console.log(`[scrape] Loaded ${existing.length} existing cases from Supabase`);
 
   const scrapers = [
     { name: "AR-SAIJ",           fn: () => scrapeAR_SAIJ(4) },
@@ -31,7 +38,7 @@ async function main(): Promise<void> {
     { name: "MX-SCJN",           fn: () => scrapeMX_SCJN(3) },
   ];
 
-  let allIncoming = [];
+  const allIncoming = [];
   const summary: Record<string, number> = {};
 
   for (const { name, fn } of scrapers) {
@@ -43,17 +50,23 @@ async function main(): Promise<void> {
       console.log(`[scrape] ${name}: ${cases.length} cases fetched`);
     } catch (err) {
       summary[name] = 0;
-      console.warn(`[scrape] ${name} failed:`, err instanceof Error ? err.message : err);
+      console.warn(
+        `[scrape] ${name} failed:`,
+        err instanceof Error ? err.message : err
+      );
     }
   }
 
   const { merged, newCount } = mergeNewCases(existing, allIncoming);
 
   if (newCount === 0) {
-    console.log("\n[scrape] No new cases found. data/jurisprudencia.json unchanged.");
+    console.log("\n[scrape] No new cases found. Supabase unchanged.");
   } else {
-    writeJurisprudenciaJSON(merged);
-    console.log(`\n[scrape] Written ${merged.length} total cases (${newCount} new) to data/jurisprudencia.json`);
+    const newCases = merged.slice(existing.length);
+    await upsertCasesToDB(newCases);
+    console.log(
+      `\n[scrape] Upserted ${newCount} new cases to Supabase (${merged.length} total)`
+    );
   }
 
   console.log("\n[scrape] Summary by source:");
@@ -62,7 +75,7 @@ async function main(): Promise<void> {
   }
   console.log(`  Total fetched: ${allIncoming.length}`);
   console.log(`  New (after dedup): ${newCount}`);
-  console.log(`  Grand total in JSON: ${merged.length}`);
+  console.log(`  Grand total in Supabase: ${merged.length}`);
 }
 
 main().catch((err) => {

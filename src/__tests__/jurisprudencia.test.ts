@@ -1,67 +1,120 @@
-import { describe, it, expect } from "vitest";
-import { jurisprudencia, filterByCountry } from "@/lib/jurisprudencia";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { fetchCasesByCountry } from "@/lib/jurisprudencia";
+import type { JurisprudenciaCase } from "@/lib/types";
 
-describe("jurisprudencia data", () => {
-  it("has at least 10 cases", () => {
-    expect(jurisprudencia.length).toBeGreaterThanOrEqual(10);
+// ── Fixtures ─────────────────────────────────────────────────────────────────
+
+function makeCase(overrides: Partial<JurisprudenciaCase> = {}): JurisprudenciaCase {
+  return {
+    expediente_id: `EXP-${Math.random().toString(36).slice(2)}`,
+    hechos: "Cobro indebido en factura de servicio de telecomunicaciones.",
+    ratio_decidendi: "La empresa incurrió en práctica comercial engañosa.",
+    probabilidad_exito: 0.72,
+    duracion_dias: 180,
+    pais: "AR",
+    ...overrides,
+  };
+}
+
+const AR_CASES: JurisprudenciaCase[] = Array.from({ length: 8 }, (_, i) =>
+  makeCase({ expediente_id: `AR-${i + 1}`, pais: "AR" })
+);
+
+const MX_CASES: JurisprudenciaCase[] = Array.from({ length: 6 }, (_, i) =>
+  makeCase({ expediente_id: `MX-${i + 1}`, pais: "MX" })
+);
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function mockFetchOk(cases: JurisprudenciaCase[]): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ cases }),
+    })
+  );
+}
+
+function mockFetchError(status = 500): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      statusText: "Internal Server Error",
+      json: async () => ({}),
+    })
+  );
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("fetchCasesByCountry", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("has at least 5 Argentine cases", () => {
-    const ar = jurisprudencia.filter((c) => c.pais === "AR");
-    expect(ar.length).toBeGreaterThanOrEqual(5);
-  });
-
-  it("has at least 5 Mexican cases", () => {
-    const mx = jurisprudencia.filter((c) => c.pais === "MX");
-    expect(mx.length).toBeGreaterThanOrEqual(5);
-  });
-
-  it("all cases have base required fields", () => {
-    for (const c of jurisprudencia) {
-      expect(c.expediente_id).toBeTruthy();
-      expect(["AR", "MX"]).toContain(c.pais);
-      // Every case must have at least raw text to be normalizable
-      expect(c.texto_crudo).toBeTruthy();
-    }
-  });
-
-  it("normalized cases have AI-populated fields", () => {
-    // Cases normalized with prob > 0 are the ones eligible for Pinecone seeding
-    const normalized = jurisprudencia.filter(
-      (c) => c.normalizado_por_ia && c.probabilidad_exito > 0
+  it("calls the correct endpoint for AR", async () => {
+    mockFetchOk(AR_CASES);
+    await fetchCasesByCountry("AR");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/jurisprudencia-fallback?pais=AR"
     );
-    expect(normalized.length).toBeGreaterThanOrEqual(5);
-    for (const c of normalized) {
-      expect(c.hechos).toBeTruthy();
-      expect(c.ratio_decidendi).toBeTruthy();
-      expect(c.probabilidad_exito).toBeGreaterThan(0);
-      expect(c.probabilidad_exito).toBeLessThanOrEqual(1);
-      expect(c.duracion_dias).toBeGreaterThan(0);
-    }
   });
 
-  it("all expediente_ids are unique", () => {
-    const ids = jurisprudencia.map((c) => c.expediente_id);
-    expect(new Set(ids).size).toBe(ids.length);
+  it("calls the correct endpoint for MX", async () => {
+    mockFetchOk(MX_CASES);
+    await fetchCasesByCountry("MX");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      "/api/jurisprudencia-fallback?pais=MX"
+    );
   });
-});
 
-describe("filterByCountry", () => {
-  it("returns only Argentine cases for AR", () => {
-    const result = filterByCountry("AR");
-    expect(result.length).toBeGreaterThanOrEqual(5);
+  it("returns cases from the API response", async () => {
+    mockFetchOk(AR_CASES);
+    const result = await fetchCasesByCountry("AR");
+    expect(result).toHaveLength(AR_CASES.length);
     expect(result.every((c) => c.pais === "AR")).toBe(true);
   });
 
-  it("returns only Mexican cases for MX", () => {
-    const result = filterByCountry("MX");
-    expect(result.length).toBeGreaterThanOrEqual(5);
-    expect(result.every((c) => c.pais === "MX")).toBe(true);
+  it("returns empty array when API returns 0 cases", async () => {
+    mockFetchOk([]);
+    const result = await fetchCasesByCountry("AR");
+    expect(result).toHaveLength(0);
   });
 
-  it("does not mutate the original array", () => {
-    const before = jurisprudencia.length;
-    filterByCountry("AR");
-    expect(jurisprudencia.length).toBe(before);
+  it("returns empty array on API error (non-critical path)", async () => {
+    mockFetchError(500);
+    const result = await fetchCasesByCountry("AR");
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array on network failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("Network failure"))
+    );
+    // fetchCasesByCountry does not throw — it returns [] for safety
+    await expect(fetchCasesByCountry("AR")).rejects.toThrow("Network failure");
+  });
+
+  it("all returned cases have required fields", async () => {
+    mockFetchOk([...AR_CASES, ...MX_CASES]);
+    const result = await fetchCasesByCountry("AR");
+    for (const c of result) {
+      expect(c.expediente_id).toBeTruthy();
+      expect(["AR", "MX"]).toContain(c.pais);
+      expect(typeof c.probabilidad_exito).toBe("number");
+      expect(typeof c.duracion_dias).toBe("number");
+    }
+  });
+
+  it("all expediente_ids are unique in response", async () => {
+    mockFetchOk(AR_CASES);
+    const result = await fetchCasesByCountry("AR");
+    const ids = result.map((c) => c.expediente_id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

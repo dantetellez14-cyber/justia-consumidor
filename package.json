@@ -14,7 +14,10 @@
     "scrape:jurisprudencia": "npx tsx scripts/scrape-jurisprudencia.ts",
     "normalize:jurisprudencia": "npx tsx scripts/normalize-jurisprudencia.ts",
     "seed:jurisprudencia": "npx tsx scripts/seed-pinecone.ts --incremental",
-    "pipeline:jurisprudencia": "npm run scrape:jurisprudencia && npm run normalize:jurisprudencia && npm run seed:jurisprudencia"
+    "pipeline:jurisprudencia": "npm run scrape:jurisprudencia && npm run normalize:jurisprudencia && npm run seed:jurisprudencia",
+    "db:push": "npx supabase db push",
+    "db:new": "npx supabase migration new",
+    "migrate:json": "npx tsx scripts/migrate-json-to-supabase.ts"
   },
   "dependencies": {
     "@clerk/localizations": "^4.3.0",
@@ -26,7 +29,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
     "framer-motion": "^12.38.0",
-    "lucide-react": "^1.7.0",
+    "lucide-react": "^1.8.0",
     "next": "16.2.2",
     "pino": "^10.3.1",
     "playwright": "^1.59.1",
@@ -50,6 +53,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "msw": "^2.13.2",
+    "supabase": "^2.91.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.2"

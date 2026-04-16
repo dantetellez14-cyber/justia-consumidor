@@ -1,11 +1,12 @@
 /**
  * normalize-jurisprudencia.ts
- * Reads data/jurisprudencia.json, finds cases without normalizado_por_ia,
- * extracts structured fields using an LLM, and writes back the updated JSON.
+ * Reads unnormalized cases from Supabase, extracts structured fields using
+ * an LLM, and writes back the updated rows.
  *
  * Provider chain (free tier, no cost):
  *   1. Gemini 2.5-flash  (20 req/day)  — fast, accurate
  *   2. Ollama gemma3:27b (∞, local)    — unlimited fallback
+ *      (disabled in CI via CI=true env var — Ollama is not available on GH Actions)
  *
  * Usage:
  *   npx tsx scripts/normalize-jurisprudencia.ts
@@ -16,8 +17,8 @@ loadEnvConfig(process.cwd());
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
-  readJurisprudenciaJSON,
-  writeJurisprudenciaJSON,
+  readUnnormalizedFromDB,
+  upsertCaseToDB,
 } from "./lib/jurisprudencia-io";
 import {
   buildNormalizePrompt,
@@ -30,6 +31,7 @@ const GEMINI_MODEL = "gemini-2.5-flash";
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
 const OLLAMA_MODEL = "gemma3:27b";
 const DELAY_MS = 2000; // 2s between requests
+const IS_CI = process.env.CI === "true";
 
 // ── Provider abstraction ─────────────────────────────────────────────────────
 
@@ -58,7 +60,7 @@ async function generateWithOllama(prompt: string): Promise<string> {
       model: OLLAMA_MODEL,
       prompt,
       stream: false,
-      options: { temperature: 0.1 }, // low temp for structured JSON output
+      options: { temperature: 0.1 },
     }),
   });
 
@@ -86,8 +88,15 @@ async function generate(
       const isQuota = msg.includes("429") || msg.includes("quota");
 
       if (isQuota) {
+        if (IS_CI) {
+          console.warn(
+            "[normalize] Gemini quota exhausted in CI — Ollama is not available. Stopping."
+          );
+          // In CI, fail gracefully: remaining cases stay unnormalized for next run.
+          throw new Error("GEMINI_QUOTA_EXHAUSTED_IN_CI");
+        }
         console.warn(
-          `[normalize] Gemini quota exhausted → switching to Ollama ${OLLAMA_MODEL} for remaining cases`
+          `[normalize] Gemini quota exhausted → switching to Ollama ${OLLAMA_MODEL}`
         );
         state.geminiExhausted = true;
         state.current = "ollama";
@@ -113,9 +122,13 @@ async function main(): Promise<void> {
   const apiKey = process.env.GEMINI_API_KEY ?? "";
 
   if (!apiKey) {
-    console.warn(
-      "[normalize] GEMINI_API_KEY not set — using Ollama only"
-    );
+    if (IS_CI) {
+      console.error(
+        "[normalize] GEMINI_API_KEY not set in CI — cannot normalize without Ollama fallback. Exiting."
+      );
+      process.exit(1);
+    }
+    console.warn("[normalize] GEMINI_API_KEY not set — using Ollama only");
   }
 
   const state: ProviderState = {
@@ -124,16 +137,15 @@ async function main(): Promise<void> {
   };
 
   console.log(`[normalize] Starting with provider: ${state.current}`);
-  if (state.current === "ollama") {
+  if (IS_CI) {
+    console.log("[normalize] Running in CI mode — Ollama fallback disabled");
+  } else if (state.current === "ollama") {
     console.log(`[normalize] Ollama model: ${OLLAMA_MODEL} at ${OLLAMA_URL}`);
   }
 
-  const cases = readJurisprudenciaJSON();
-  const toNormalize = cases.filter((c) => !c.normalizado_por_ia && c.texto_crudo);
+  const toNormalize = await readUnnormalizedFromDB();
 
-  console.log(
-    `[normalize] ${toNormalize.length} cases to normalize (${cases.length} total)`
-  );
+  console.log(`[normalize] ${toNormalize.length} cases to normalize`);
 
   if (toNormalize.length === 0) {
     console.log("[normalize] Nothing to do.");
@@ -158,12 +170,18 @@ async function main(): Promise<void> {
         );
         failedCount++;
       } else {
-        caseItem.hechos = parsed.hechos;
-        caseItem.ratio_decidendi = parsed.ratio_decidendi;
-        caseItem.categoria = parsed.categoria;
-        caseItem.probabilidad_exito = parsed.probabilidad_exito;
-        caseItem.duracion_dias = parsed.duracion_dias;
-        caseItem.normalizado_por_ia = true;
+        const updated = {
+          ...caseItem,
+          hechos: parsed.hechos,
+          ratio_decidendi: parsed.ratio_decidendi,
+          categoria: parsed.categoria,
+          probabilidad_exito: parsed.probabilidad_exito,
+          duracion_dias: parsed.duracion_dias,
+          normalizado_por_ia: true,
+        };
+
+        await upsertCaseToDB(updated);
+
         normalizedCount++;
         console.log(
           `[normalize] ${label} ✓ ${caseItem.expediente_id.slice(0, 50)} (prob: ${parsed.probabilidad_exito}, via ${usedProvider})`
@@ -171,14 +189,19 @@ async function main(): Promise<void> {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+
+      if (msg === "GEMINI_QUOTA_EXHAUSTED_IN_CI") {
+        console.log(
+          `[normalize] Stopping early — ${normalizedCount} normalized before quota hit.`
+        );
+        break;
+      }
+
       console.warn(
         `[normalize] ${label} ✗ ${caseItem.expediente_id.slice(0, 50)}: ${msg.slice(0, 100)}`
       );
       failedCount++;
     }
-
-    // Save progress after every case
-    writeJurisprudenciaJSON(cases);
 
     if (i < toNormalize.length - 1) {
       await sleep(DELAY_MS);

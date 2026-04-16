@@ -1,43 +1,34 @@
-import { z } from "zod";
-import casesData from "../../data/jurisprudencia.json";
-import type { JurisprudenciaCase, JurisprudenciaCaseExtended } from "./types";
+/**
+ * jurisprudencia.ts
+ * Client-safe helpers for accessing jurisprudencia data.
+ *
+ * fetchCasesByCountry() calls the server-side API route
+ * (/api/jurisprudencia-fallback) which reads from Supabase.
+ * Safe to call from "use client" components.
+ */
 
-// Runtime validation schema: ensures all required fields are present.
-// Includes base case fields plus extended fields that should be in the JSON.
-const caseSchema = z.object({
-  // Base case fields
-  expediente_id: z.string(),
-  hechos: z.string(),
-  ratio_decidendi: z.string(),
-  probabilidad_exito: z.number(),
-  duracion_dias: z.number(),
-  pais: z.enum(["AR", "MX"]),
-  // Extended case fields
-  categoria: z.string(),
-  tribunal: z.string(),
-  fecha_resolucion: z.string(),
-  url_fuente: z.string(),
-  texto_crudo: z.string(),
-  normalizado_por_ia: z.boolean(),
-}).passthrough();
+import type { JurisprudenciaCase } from "./types";
 
-const casesArraySchema = z.array(caseSchema);
-
-function loadAndValidateCases(): ReadonlyArray<JurisprudenciaCaseExtended> {
-  const result = casesArraySchema.safeParse(casesData as unknown);
-  if (!result.success) {
-    throw new Error(
-      `[jurisprudencia] data/jurisprudencia.json failed validation: ${result.error.message}`
-    );
-  }
-  return result.data as JurisprudenciaCaseExtended[];
-}
-
-export const jurisprudencia: ReadonlyArray<JurisprudenciaCaseExtended> =
-  loadAndValidateCases();
-
-export function filterByCountry(
+/**
+ * Fetches normalized jurisprudencia cases for a country.
+ * Used as a Pinecone fallback in client components.
+ *
+ * @param pais  "AR" | "MX"
+ * @returns Array of up to 20 cases ordered by probabilidad_exito desc
+ */
+export async function fetchCasesByCountry(
   pais: "AR" | "MX"
-): ReadonlyArray<JurisprudenciaCase> {
-  return jurisprudencia.filter((c) => c.pais === pais);
+): Promise<ReadonlyArray<JurisprudenciaCase>> {
+  const res = await fetch(`/api/jurisprudencia-fallback?pais=${pais}`);
+
+  if (!res.ok) {
+    // Non-critical path — return empty rather than crashing the UI
+    console.error(
+      `[jurisprudencia] fetchCasesByCountry failed: ${res.status} ${res.statusText}`
+    );
+    return [];
+  }
+
+  const data = (await res.json()) as { cases: JurisprudenciaCase[] };
+  return data.cases ?? [];
 }
