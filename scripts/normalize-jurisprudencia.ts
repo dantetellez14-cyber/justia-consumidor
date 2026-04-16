@@ -1,13 +1,14 @@
 /**
  * normalize-jurisprudencia.ts
- * Reads data/jurisprudencia.json, finds cases with normalizado_por_ia: false,
- * calls Gemini to fill hechos/ratio_decidendi/categoria/probabilidad_exito/duracion_dias,
- * writes back the updated JSON.
+ * Reads data/jurisprudencia.json, finds cases without normalizado_por_ia,
+ * extracts structured fields using an LLM, and writes back the updated JSON.
+ *
+ * Provider chain (free tier, no cost):
+ *   1. Gemini 2.5-flash  (20 req/day)  — fast, accurate
+ *   2. Ollama gemma3:27b (∞, local)    — unlimited fallback
  *
  * Usage:
  *   npx tsx scripts/normalize-jurisprudencia.ts
- *
- * Requires: GEMINI_API_KEY
  */
 
 import { loadEnvConfig } from "@next/env";
@@ -23,33 +24,115 @@ import {
   parseNormalizeResponse,
 } from "./lib/normalize-prompt";
 
-const BATCH_SIZE = 1;
-// gemini-2.5-flash: 20 req/day free tier — fall back to 2.0-flash (1500 req/day) then 2.0-flash-lite
-const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
-const DELAY_MS = 4000; // 4s between requests (~15 rpm, well under 15 rpm limit)
+// ── Configuration ────────────────────────────────────────────────────────────
+
+const GEMINI_MODEL = "gemini-2.5-flash";
+const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://localhost:11434";
+const OLLAMA_MODEL = "gemma3:27b";
+const DELAY_MS = 2000; // 2s between requests
+
+// ── Provider abstraction ─────────────────────────────────────────────────────
+
+type Provider = "gemini" | "ollama";
+
+interface ProviderState {
+  current: Provider;
+  geminiExhausted: boolean;
+}
+
+async function generateWithGemini(
+  prompt: string,
+  apiKey: string
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+async function generateWithOllama(prompt: string): Promise<string> {
+  const response = await fetch(`${OLLAMA_URL}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt,
+      stream: false,
+      options: { temperature: 0.1 }, // low temp for structured JSON output
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Ollama error ${response.status}: ${await response.text()}`
+    );
+  }
+
+  const data = (await response.json()) as { response: string };
+  return data.response;
+}
+
+async function generate(
+  prompt: string,
+  state: ProviderState,
+  apiKey: string
+): Promise<{ text: string; usedProvider: Provider }> {
+  if (state.current === "gemini" && !state.geminiExhausted) {
+    try {
+      const text = await generateWithGemini(prompt, apiKey);
+      return { text, usedProvider: "gemini" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isQuota = msg.includes("429") || msg.includes("quota");
+
+      if (isQuota) {
+        console.warn(
+          `[normalize] Gemini quota exhausted → switching to Ollama ${OLLAMA_MODEL} for remaining cases`
+        );
+        state.geminiExhausted = true;
+        state.current = "ollama";
+        // Fall through to Ollama below
+      } else {
+        throw err; // non-quota Gemini error — propagate
+      }
+    }
+  }
+
+  // Ollama path
+  const text = await generateWithOllama(prompt);
+  return { text, usedProvider: "ollama" };
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function main(): Promise<void> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY ?? "";
+
   if (!apiKey) {
-    console.error("[normalize] Error: GEMINI_API_KEY is required");
-    process.exit(1);
+    console.warn(
+      "[normalize] GEMINI_API_KEY not set — using Ollama only"
+    );
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  // Start with 2.5-flash, fall back to 1.5-flash on 429
-  let modelIndex = 0;
-  let model = genAI.getGenerativeModel({ model: MODELS[modelIndex] });
-  console.log(`[normalize] Using model: ${MODELS[modelIndex]}`);
+  const state: ProviderState = {
+    current: apiKey ? "gemini" : "ollama",
+    geminiExhausted: !apiKey,
+  };
+
+  console.log(`[normalize] Starting with provider: ${state.current}`);
+  if (state.current === "ollama") {
+    console.log(`[normalize] Ollama model: ${OLLAMA_MODEL} at ${OLLAMA_URL}`);
+  }
 
   const cases = readJurisprudenciaJSON();
   const toNormalize = cases.filter((c) => !c.normalizado_por_ia && c.texto_crudo);
 
   console.log(
-    `[normalize] Found ${toNormalize.length} cases to normalize out of ${cases.length} total`
+    `[normalize] ${toNormalize.length} cases to normalize (${cases.length} total)`
   );
 
   if (toNormalize.length === 0) {
@@ -60,92 +143,52 @@ async function main(): Promise<void> {
   let normalizedCount = 0;
   let failedCount = 0;
 
-  // Process in batches
-  for (let i = 0; i < toNormalize.length; i += BATCH_SIZE) {
-    const batch = toNormalize.slice(i, i + BATCH_SIZE);
-    console.log(
-      `[normalize] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(toNormalize.length / BATCH_SIZE)} (${batch.length} cases)`
-    );
+  for (let i = 0; i < toNormalize.length; i++) {
+    const caseItem = toNormalize[i];
+    const label = `[${i + 1}/${toNormalize.length}]`;
 
-    await Promise.all(
-      batch.map(async (caseItem) => {
-        try {
-          const prompt = buildNormalizePrompt(caseItem.texto_crudo);
-          const result = await model.generateContent(prompt);
-          const responseText = result.response.text();
-          const parsed = parseNormalizeResponse(responseText);
+    try {
+      const prompt = buildNormalizePrompt(caseItem.texto_crudo);
+      const { text, usedProvider } = await generate(prompt, state, apiKey);
+      const parsed = parseNormalizeResponse(text);
 
-          if (!parsed) {
-            console.warn(
-              `[normalize] Could not parse Gemini response for ${caseItem.expediente_id}`
-            );
-            failedCount++;
-            return;
-          }
+      if (!parsed) {
+        console.warn(
+          `[normalize] ${label} Could not parse response for ${caseItem.expediente_id} (${usedProvider})`
+        );
+        failedCount++;
+      } else {
+        caseItem.hechos = parsed.hechos;
+        caseItem.ratio_decidendi = parsed.ratio_decidendi;
+        caseItem.categoria = parsed.categoria;
+        caseItem.probabilidad_exito = parsed.probabilidad_exito;
+        caseItem.duracion_dias = parsed.duracion_dias;
+        caseItem.normalizado_por_ia = true;
+        normalizedCount++;
+        console.log(
+          `[normalize] ${label} ✓ ${caseItem.expediente_id.slice(0, 50)} (prob: ${parsed.probabilidad_exito}, via ${usedProvider})`
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[normalize] ${label} ✗ ${caseItem.expediente_id.slice(0, 50)}: ${msg.slice(0, 100)}`
+      );
+      failedCount++;
+    }
 
-          // Update case in-place
-          caseItem.hechos = parsed.hechos;
-          caseItem.ratio_decidendi = parsed.ratio_decidendi;
-          caseItem.categoria = parsed.categoria;
-          caseItem.probabilidad_exito = parsed.probabilidad_exito;
-          caseItem.duracion_dias = parsed.duracion_dias;
-          caseItem.normalizado_por_ia = true;
-          normalizedCount++;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          const isQuota = msg.includes("429") || msg.includes("quota");
-
-          // Try next model in the fallback chain on quota exhaustion
-          if (isQuota && modelIndex < MODELS.length - 1) {
-            modelIndex++;
-            model = genAI.getGenerativeModel({ model: MODELS[modelIndex] });
-            console.warn(
-              `[normalize] Quota hit on ${MODELS[modelIndex - 1]}, switching to ${MODELS[modelIndex]}`
-            );
-            // Retry this case with the new model
-            try {
-              const prompt = buildNormalizePrompt(caseItem.texto_crudo);
-              const result = await model.generateContent(prompt);
-              const responseText = result.response.text();
-              const parsed = parseNormalizeResponse(responseText);
-              if (parsed) {
-                caseItem.hechos = parsed.hechos;
-                caseItem.ratio_decidendi = parsed.ratio_decidendi;
-                caseItem.categoria = parsed.categoria;
-                caseItem.probabilidad_exito = parsed.probabilidad_exito;
-                caseItem.duracion_dias = parsed.duracion_dias;
-                caseItem.normalizado_por_ia = true;
-                normalizedCount++;
-                return;
-              }
-            } catch (retryErr) {
-              console.warn(
-                `[normalize] Retry failed for ${caseItem.expediente_id}:`,
-                retryErr instanceof Error ? retryErr.message.slice(0, 120) : retryErr
-              );
-            }
-          } else {
-            console.warn(
-              `[normalize] Gemini error for ${caseItem.expediente_id}:`,
-              msg.slice(0, 120)
-            );
-          }
-          failedCount++;
-        }
-      })
-    );
-
-    // Write progress after each batch so partial progress is saved
+    // Save progress after every case
     writeJurisprudenciaJSON(cases);
 
-    if (i + BATCH_SIZE < toNormalize.length) {
+    if (i < toNormalize.length - 1) {
       await sleep(DELAY_MS);
     }
   }
 
   console.log(
-    `[normalize] Done. Normalized: ${normalizedCount}, Failed: ${failedCount}`
+    `\n[normalize] Done. ✓ ${normalizedCount} normalized | ✗ ${failedCount} failed`
   );
+  console.log(`[normalize] Final provider used: ${state.current}`);
 }
 
 main().catch((err) => {
