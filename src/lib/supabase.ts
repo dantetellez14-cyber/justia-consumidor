@@ -30,6 +30,7 @@ export type CaseStatus =
   | "reclamo_generado"
   | "enviado_empresa"
   | "en_mediacion"
+  | "escalado"
   | "resuelto";
 
 export interface CaseRecord {

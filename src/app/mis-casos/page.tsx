@@ -44,6 +44,11 @@ const STATUS_CONFIG: Record<
     color: "bg-orange-100 text-orange-700",
     icon: Scale,
   },
+  escalado: {
+    label: "Escalado",
+    color: "bg-red-100 text-red-700",
+    icon: AlertCircle,
+  },
   resuelto: {
     label: "Resuelto",
     color: "bg-emerald-100 text-emerald-700",
@@ -256,6 +261,13 @@ export default function MisCasosPage() {
                           </div>
                         </div>
                       )}
+                      <Link
+                        href={`/mis-casos/seguimiento?id=${c.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                      >
+                        Ver timeline
+                      </Link>
                       {hasResponses && (
                         <ChevronDown
                           className={`h-5 w-5 text-slate-400 transition-transform ${
