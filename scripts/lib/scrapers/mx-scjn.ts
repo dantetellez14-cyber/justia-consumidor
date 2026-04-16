@@ -125,7 +125,8 @@ async function goToSearchPage(page: Page, query: string, targetPage: number): Pr
 }
 
 export async function scrapeMX_SCJN(
-  maxCases = 20
+  maxCases = 20,
+  query = SEARCH_QUERY
 ): Promise<JurisprudenciaCaseExtended[]> {
   const results: JurisprudenciaCaseExtended[] = [];
   const seenIds = new Set<string>();
@@ -139,7 +140,7 @@ export async function scrapeMX_SCJN(
   try {
     const page = await context.newPage();
     console.log("[SCJN] Loading Buscador Jurídico...");
-    await goToSearch(page, SEARCH_QUERY);
+    await goToSearch(page, query);
 
     // Collect all titles with the page they appear on
     const allTitles: Array<{ title: string; searchPage: number }> = [];
@@ -187,7 +188,7 @@ export async function scrapeMX_SCJN(
       console.log(`[SCJN] Case ${i + 1}/${titlesToProcess.length}: ${title.slice(0, 60)}`);
 
       // Navigate to the search page where this title appears
-      await goToSearchPage(page, SEARCH_QUERY, searchPage);
+      await goToSearchPage(page, query, searchPage);
 
       // JS-click the link matching this title (bypasses overlay)
       const clicked = await page.evaluate((targetTitle: string) => {

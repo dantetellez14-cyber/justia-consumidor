@@ -24,7 +24,9 @@ import {
 } from "./lib/normalize-prompt";
 
 const BATCH_SIZE = 1;
-const DELAY_MS = 15000; // 15s between requests to respect Gemini 5 requests-per-minute limit
+// gemini-2.5-flash: 20 req/day free tier — fall back to 2.0-flash (1500 req/day) then 2.0-flash-lite
+const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
+const DELAY_MS = 4000; // 4s between requests (~15 rpm, well under 15 rpm limit)
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -38,7 +40,10 @@ async function main(): Promise<void> {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  // Start with 2.5-flash, fall back to 1.5-flash on 429
+  let modelIndex = 0;
+  let model = genAI.getGenerativeModel({ model: MODELS[modelIndex] });
+  console.log(`[normalize] Using model: ${MODELS[modelIndex]}`);
 
   const cases = readJurisprudenciaJSON();
   const toNormalize = cases.filter((c) => !c.normalizado_por_ia && c.texto_crudo);
@@ -78,7 +83,7 @@ async function main(): Promise<void> {
             return;
           }
 
-          // Update case in-place (we re-read below before writing)
+          // Update case in-place
           caseItem.hechos = parsed.hechos;
           caseItem.ratio_decidendi = parsed.ratio_decidendi;
           caseItem.categoria = parsed.categoria;
@@ -87,10 +92,44 @@ async function main(): Promise<void> {
           caseItem.normalizado_por_ia = true;
           normalizedCount++;
         } catch (err) {
-          console.warn(
-            `[normalize] Gemini error for ${caseItem.expediente_id}:`,
-            err instanceof Error ? err.message : err
-          );
+          const msg = err instanceof Error ? err.message : String(err);
+          const isQuota = msg.includes("429") || msg.includes("quota");
+
+          // Try next model in the fallback chain on quota exhaustion
+          if (isQuota && modelIndex < MODELS.length - 1) {
+            modelIndex++;
+            model = genAI.getGenerativeModel({ model: MODELS[modelIndex] });
+            console.warn(
+              `[normalize] Quota hit on ${MODELS[modelIndex - 1]}, switching to ${MODELS[modelIndex]}`
+            );
+            // Retry this case with the new model
+            try {
+              const prompt = buildNormalizePrompt(caseItem.texto_crudo);
+              const result = await model.generateContent(prompt);
+              const responseText = result.response.text();
+              const parsed = parseNormalizeResponse(responseText);
+              if (parsed) {
+                caseItem.hechos = parsed.hechos;
+                caseItem.ratio_decidendi = parsed.ratio_decidendi;
+                caseItem.categoria = parsed.categoria;
+                caseItem.probabilidad_exito = parsed.probabilidad_exito;
+                caseItem.duracion_dias = parsed.duracion_dias;
+                caseItem.normalizado_por_ia = true;
+                normalizedCount++;
+                return;
+              }
+            } catch (retryErr) {
+              console.warn(
+                `[normalize] Retry failed for ${caseItem.expediente_id}:`,
+                retryErr instanceof Error ? retryErr.message.slice(0, 120) : retryErr
+              );
+            }
+          } else {
+            console.warn(
+              `[normalize] Gemini error for ${caseItem.expediente_id}:`,
+              msg.slice(0, 120)
+            );
+          }
           failedCount++;
         }
       })
