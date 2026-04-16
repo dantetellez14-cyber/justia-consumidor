@@ -5,20 +5,27 @@ on:
     - cron: '0 6 * * 1'   # Every Monday at 6am UTC
   workflow_dispatch:        # Also triggerable manually from GitHub UI
 
+# NOTE: GitHub Actions is intentionally used here instead of Vercel Cron Jobs.
+# Reason: the scrape step requires Playwright/Chromium (~300 MB, full browser),
+# and the full pipeline can run 20-30 min — both exceed Vercel Function constraints
+# (no native Playwright support, 300 s max timeout). GitHub Actions is the correct
+# runtime for this workload.
+
 jobs:
   pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
+
+    env:
+      # Supabase (shared across all steps)
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -36,8 +43,11 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Normalize with Gemini
+      - name: Normalize with Gemini (CI mode — no Ollama fallback)
         run: npm run normalize:jurisprudencia
+        # CI=true is set automatically by GitHub Actions.
+        # The script detects this and stops gracefully if Gemini quota is hit
+        # instead of trying to reach Ollama (unavailable in CI).
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
@@ -47,50 +57,12 @@ jobs:
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
           PINECONE_INDEX_NAME: justia-jurisprudencia
 
-      - name: Check for new cases
-        id: diff
+      - name: Pipeline summary
+        if: always()
         run: |
-          git diff --name-only | grep "data/jurisprudencia.json" && echo "changed=true" >> $GITHUB_OUTPUT || echo "changed=false" >> $GITHUB_OUTPUT
-
-      - name: Create PR with new cases
-        if: steps.diff.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DATE=$(date +%Y-%m-%d)
-          BRANCH="jurisprudencia/${DATE}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add data/jurisprudencia.json
-          TOTAL=$(node -e "const f=require('./data/jurisprudencia.json'); console.log(f.length)")
-          NEW=$(git diff --cached -- data/jurisprudencia.json | grep '^+' | grep 'expediente_id' | wc -l | tr -d ' ')
-          git commit -m "feat(jurisprudencia): +${NEW} casos nuevos (${DATE})"
-          git push origin "$BRANCH"
-          gh pr create \
-            --title "feat(jurisprudencia): +${NEW} casos nuevos (${DATE})" \
-            --body "## Jurisprudencia Update — ${DATE}
-
-          Pipeline semanal encontró **${NEW} casos nuevos** de fuentes públicas AR/MX.
-          Total en el índice: **${TOTAL} casos**.
-
-          ### Fuentes consultadas
-          - 🇦🇷 SAIJ (jurisprudencia.gob.ar)
-          - 🇦🇷 Boletín Oficial (disposiciones Ley 24.240)
-          - 🇦🇷 CSJN Suplemento Consumidor
-          - 🇦🇷 DESCAjus / JURISTECA (Tribunal Consumo CABA)
-          - 🇲🇽 SJF2 (tesis jurisprudenciales SCJN)
-          - 🇲🇽 Buscador Jurídico SCJN
-
-          ### Revisión
-          - [ ] Revisar \`data/jurisprudencia.json\` en la pestaña **Files changed**
-          - [ ] Verificar que los \`hechos\` y \`ratio_decidendi\` estén correctamente normalizados
-          - [ ] Aprobar y mergear cuando el contenido sea correcto
-
-          🤖 Generado automáticamente por el pipeline de jurisprudencia" \
-            --base main \
-            --head "$BRANCH"
-
-      - name: No new cases found
-        if: steps.diff.outputs.changed != 'true'
-        run: echo "[pipeline] No new cases found this week. Nothing to do."
+          echo "## 📚 Jurisprudencia Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Cases are stored in Supabase \`jurisprudencia_cases\` table." >> $GITHUB_STEP_SUMMARY
+          echo "Review new cases at: https://supabase.com/dashboard/project/lwefezjoqeesbjdgublt/editor" >> $GITHUB_STEP_SUMMARY
