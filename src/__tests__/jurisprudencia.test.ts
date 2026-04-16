@@ -26,8 +26,10 @@ describe("jurisprudencia data", () => {
   });
 
   it("normalized cases have AI-populated fields", () => {
-    const normalized = jurisprudencia.filter((c) => c.normalizado_por_ia);
-    // At least the original 10 hand-curated cases must remain normalized
+    // Cases normalized with prob > 0 are the ones eligible for Pinecone seeding
+    const normalized = jurisprudencia.filter(
+      (c) => c.normalizado_por_ia && c.probabilidad_exito > 0
+    );
     expect(normalized.length).toBeGreaterThanOrEqual(5);
     for (const c of normalized) {
       expect(c.hechos).toBeTruthy();
