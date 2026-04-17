@@ -68,6 +68,7 @@ describe("CaseWithResponses type", () => {
     const caseWithResponses: CaseWithResponses = {
       ...baseCase,
       company_responses: [],
+      consumer_responses: [],
     };
     expect(caseWithResponses.company_responses).toHaveLength(0);
     expect(caseWithResponses.empresa).toBe("Telecom");
@@ -92,6 +93,7 @@ describe("CaseWithResponses type", () => {
           created_at: "2024-01-25T10:00:00Z",
         },
       ],
+      consumer_responses: [],
     };
     expect(caseWithResponses.company_responses).toHaveLength(2);
     expect(caseWithResponses.company_responses[0].tipo_respuesta).toBe("solicitar_info");
@@ -111,6 +113,7 @@ describe("CaseWithResponses type", () => {
           created_at: "2024-01-20T10:00:00Z",
         },
       ],
+      consumer_responses: [],
     };
     const latestResponse = caseWithResponses.company_responses[0];
     const isResolved = latestResponse?.tipo_respuesta === "aceptar";

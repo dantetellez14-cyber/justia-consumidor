@@ -49,6 +49,14 @@ export interface CompanyResponse {
   readonly created_at: string;
 }
 
+export interface ConsumerReply {
+  readonly id: string;
+  readonly tipo_respuesta: "aceptar" | "rechazar" | "contraofertar" | "mensaje";
+  readonly mensaje: string;
+  readonly monto_contraoferta: number | null;
+  readonly created_at: string;
+}
+
 export interface CompanyCaseView {
   readonly id: string;
   readonly empresa: string | null;
@@ -65,6 +73,7 @@ export interface CompanyCaseView {
   readonly arbitration_completed: boolean;
   readonly relato: string;
   readonly responses: ReadonlyArray<CompanyResponse>;
+  readonly consumer_replies: ReadonlyArray<ConsumerReply>;
 }
 
 export interface CompanyDashboardStats {
@@ -340,12 +349,19 @@ export async function getCompanyComplaints(
 
   const caseIds = cases.map((c: Record<string, unknown>) => c.id as string);
 
-  // Get all responses for these cases
-  const { data: responses } = await supabase
-    .from("company_responses")
-    .select("*")
-    .in("case_id", caseIds)
-    .order("created_at", { ascending: true });
+  // Get all responses + consumer replies for these cases in parallel
+  const [{ data: responses }, { data: consumerReplies }] = await Promise.all([
+    supabase
+      .from("company_responses")
+      .select("*")
+      .in("case_id", caseIds)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("consumer_responses")
+      .select("id, tipo_respuesta, mensaje, monto_contraoferta, created_at, case_id")
+      .in("case_id", caseIds)
+      .order("created_at", { ascending: true }),
+  ]);
 
   const responseMap = new Map<string, CompanyResponse[]>();
   for (const r of (responses ?? []) as CompanyResponse[]) {
@@ -353,9 +369,16 @@ export async function getCompanyComplaints(
     responseMap.set(r.case_id, [...existing, r]);
   }
 
+  const consumerMap = new Map<string, ConsumerReply[]>();
+  for (const r of (consumerReplies ?? []) as (ConsumerReply & { case_id: string })[]) {
+    const existing = consumerMap.get(r.case_id) ?? [];
+    consumerMap.set(r.case_id, [...existing, r]);
+  }
+
   return cases.map((c: Record<string, unknown>) => ({
-    ...(c as Omit<CompanyCaseView, "responses">),
+    ...(c as Omit<CompanyCaseView, "responses" | "consumer_replies">),
     responses: responseMap.get(c.id as string) ?? [],
+    consumer_replies: consumerMap.get(c.id as string) ?? [],
   }));
 }
 
@@ -374,16 +397,24 @@ export async function getComplaintById(
 
   if (!caseData) return null;
 
-  const { data: responses } = await supabase
-    .from("company_responses")
-    .select("*")
-    .eq("case_id", caseId)
-    .eq("company_id", companyId)
-    .order("created_at", { ascending: true });
+  const [{ data: responses }, { data: consumerReplies }] = await Promise.all([
+    supabase
+      .from("company_responses")
+      .select("*")
+      .eq("case_id", caseId)
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("consumer_responses")
+      .select("id, tipo_respuesta, mensaje, monto_contraoferta, created_at")
+      .eq("case_id", caseId)
+      .order("created_at", { ascending: true }),
+  ]);
 
   return {
-    ...(caseData as Omit<CompanyCaseView, "responses">),
+    ...(caseData as Omit<CompanyCaseView, "responses" | "consumer_replies">),
     responses: (responses ?? []) as CompanyResponse[],
+    consumer_replies: (consumerReplies ?? []) as ConsumerReply[],
   };
 }
 

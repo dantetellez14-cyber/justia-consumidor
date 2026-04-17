@@ -766,39 +766,62 @@ function ComplaintDetail({
         )}
       </div>
 
-      {/* Previous responses */}
-      {complaint.responses.length > 0 && (
+      {/* Conversation thread — empresa responses + consumer replies */}
+      {(complaint.responses.length > 0 || complaint.consumer_replies?.length > 0) && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h4 className="mb-3 text-sm font-semibold text-slate-600">
-            Respuestas anteriores
+            Conversación
           </h4>
           <div className="space-y-3">
-            {complaint.responses.map((r) => (
-              <div
-                key={r.id}
-                className="rounded-lg border border-slate-100 bg-slate-50 p-3"
-              >
-                <div className="mb-1 flex items-center gap-2 text-xs text-slate-400">
-                  <span className="font-semibold capitalize text-slate-600">
-                    {r.tipo_respuesta.replace("_", " ")}
-                  </span>
-                  <span>
-                    {new Date(r.created_at).toLocaleDateString("es", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+            {/* Build interleaved thread sorted by date */}
+            {[
+              ...complaint.responses.map((r) => ({ ...r, _type: "empresa" as const })),
+              ...(complaint.consumer_replies ?? []).map((r) => ({ ...r, _type: "consumidor" as const, propuesta_monto: null })),
+            ]
+              .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+              .map((r) => (
+                <div
+                  key={r.id}
+                  className={`rounded-lg border p-3 ${
+                    r._type === "empresa"
+                      ? "border-slate-100 bg-slate-50"
+                      : "border-indigo-100 bg-indigo-50/50 ml-4"
+                  }`}
+                >
+                  <div className="mb-1 flex items-center gap-2 text-xs text-slate-400">
+                    <span className={`font-semibold ${r._type === "empresa" ? "text-slate-600" : "text-indigo-600"}`}>
+                      {r._type === "empresa" ? "Tu empresa" : "Consumidor"}
+                    </span>
+                    <span className="capitalize">
+                      {r.tipo_respuesta.replace("_", " ")}
+                    </span>
+                    <span className="ml-auto">
+                      {new Date(r.created_at).toLocaleDateString("es", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-700">{r.mensaje}</p>
+                  {r._type === "empresa" && r.propuesta_monto != null && (
+                    <p className="mt-1 text-xs font-semibold text-emerald-600">
+                      Propuesta: ${r.propuesta_monto.toLocaleString()}
+                    </p>
+                  )}
+                  {r._type === "consumidor" && "monto_contraoferta" in r && r.monto_contraoferta != null && (
+                    <p className="mt-1 text-xs font-semibold text-indigo-600">
+                      Contraoferta: ${(r.monto_contraoferta as number).toLocaleString()}
+                    </p>
+                  )}
+                  {r._type === "consumidor" && r.tipo_respuesta === "aceptar" && (
+                    <p className="mt-1 text-xs font-semibold text-emerald-600">
+                      ✓ El consumidor aceptó — caso resuelto
+                    </p>
+                  )}
                 </div>
-                <p className="text-sm text-slate-700">{r.mensaje}</p>
-                {r.propuesta_monto != null && (
-                  <p className="mt-1 text-xs font-semibold text-emerald-600">
-                    Propuesta: ${r.propuesta_monto.toLocaleString()}
-                  </p>
-                )}
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}

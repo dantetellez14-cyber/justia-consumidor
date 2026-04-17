@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
   const caseId = parsedQuery.data.id;
 
   const CASE_WITH_RESPONSES_SELECT =
-    "*, company_responses(id, tipo_respuesta, mensaje, propuesta_monto, created_at)";
+    "*, company_responses(id, tipo_respuesta, mensaje, propuesta_monto, created_at), consumer_responses(id, tipo_respuesta, mensaje, monto_contraoferta, created_at)";
 
   // Single case lookup — filtered by user_id for ownership
   if (caseId) {

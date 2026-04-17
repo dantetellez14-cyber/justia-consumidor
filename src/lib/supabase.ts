@@ -61,9 +61,24 @@ export interface CompanyResponseView {
   readonly created_at: string;
 }
 
-/** CaseRecord extended with company responses for consumer views. */
+/** Consumer reply to a company response. */
+export interface ConsumerResponseView {
+  readonly id: string;
+  readonly tipo_respuesta: "aceptar" | "rechazar" | "contraofertar" | "mensaje";
+  readonly mensaje: string;
+  readonly monto_contraoferta: number | null;
+  readonly created_at: string;
+}
+
+/** Unified message in the thread (either side). */
+export type ThreadMessage =
+  | (CompanyResponseView & { readonly sender: "empresa" })
+  | (ConsumerResponseView & { readonly sender: "consumidor" });
+
+/** CaseRecord extended with all messages for consumer views. */
 export interface CaseWithResponses extends CaseRecord {
   readonly company_responses: ReadonlyArray<CompanyResponseView>;
+  readonly consumer_responses: ReadonlyArray<ConsumerResponseView>;
 }
 
 export interface FeedbackRecord {

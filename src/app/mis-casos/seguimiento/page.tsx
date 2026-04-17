@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
-import type { CaseWithResponses, CaseStatus } from "@/lib/supabase";
+import type { CaseWithResponses, CaseStatus, ConsumerResponseView } from "@/lib/supabase";
+import { MessageThread } from "@/components/message-thread";
 
 // ── Timeline step config ──────────────────────────────────────────────────────
 
@@ -232,11 +233,18 @@ function SeguimientoContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
 
-  const { data: caseData, error, isLoading } = useSWR<CaseWithResponses>(
+  const { data: caseData, error, isLoading, mutate } = useSWR<CaseWithResponses>(
     id ? `/api/cases?id=${id}` : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
+    { revalidateOnFocus: true, dedupingInterval: 30000 }
   );
+
+  // Optimistically update status to "resuelto" if consumer accepted
+  const handleReplySubmitted = (reply: ConsumerResponseView) => {
+    if (reply.tipo_respuesta === "aceptar") {
+      void mutate();
+    }
+  };
 
   // No ID provided
   if (!id) {
@@ -323,39 +331,19 @@ function SeguimientoContent() {
           ))}
         </div>
 
-        {/* Company responses */}
-        {caseData.company_responses && caseData.company_responses.length > 0 && (
-          <div className="mt-10 border-t border-slate-800 pt-8">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
-              Respuestas de la empresa
-            </h3>
-            <div className="space-y-3">
-              {caseData.company_responses.map((resp) => (
-                <div
-                  key={resp.id}
-                  className="bg-[#1e293b] border border-slate-700 rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                      {resp.tipo_respuesta}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {formatDate(resp.created_at)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {resp.mensaje}
-                  </p>
-                  {resp.propuesta_monto !== null && (
-                    <div className="mt-2 text-sm font-medium text-emerald-400">
-                      Propuesta: {formatCurrency(resp.propuesta_monto, caseData.pais_detectado)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Message thread — empresa + consumer replies */}
+        <div className="mt-10 border-t border-slate-800 pt-8">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-5">
+            Conversación con la empresa
+          </h3>
+          <MessageThread
+            caseId={caseData.id}
+            companyResponses={caseData.company_responses ?? []}
+            consumerResponses={caseData.consumer_responses ?? []}
+            caseStatus={caseData.status}
+            onReplySubmitted={handleReplySubmitted}
+          />
+        </div>
       </div>
 
       {/* Right column — metrics */}
