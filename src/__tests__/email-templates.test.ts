@@ -105,32 +105,41 @@ describe("buildComplaintEmailHtml", () => {
 });
 
 describe("buildUserConfirmationHtml", () => {
+  const baseArgs = {
+    nombre: "Juan",
+    analysis: mockAnalysis,
+    complaintText: "Solicito el reembolso de los cobros indebidos.",
+  };
+
   it("returns valid HTML", () => {
-    const html = buildUserConfirmationHtml("Juan", "Telecom");
+    const html = buildUserConfirmationHtml(baseArgs);
     expect(html).toContain("<!DOCTYPE html>");
     expect(html).toContain("</html>");
   });
 
   it("includes user name", () => {
-    const html = buildUserConfirmationHtml("María López", "Telecom");
+    const html = buildUserConfirmationHtml({ ...baseArgs, nombre: "María López" });
     expect(html).toContain("María López");
   });
 
   it("includes empresa name", () => {
-    const html = buildUserConfirmationHtml("Juan", "MercadoLibre");
+    const html = buildUserConfirmationHtml({
+      ...baseArgs,
+      analysis: { ...mockAnalysis, empresa: "MercadoLibre" },
+    });
     expect(html).toContain("MercadoLibre");
   });
 
   it("mentions next steps", () => {
-    const html = buildUserConfirmationHtml("Juan", "Telecom");
-    expect(html).toContain("10 dias habiles");
+    const html = buildUserConfirmationHtml(baseArgs);
+    expect(html).toContain("10 d");
   });
 
   it("escapes HTML in inputs", () => {
-    const html = buildUserConfirmationHtml(
-      '<script>alert("xss")</script>',
-      "Test"
-    );
+    const html = buildUserConfirmationHtml({
+      ...baseArgs,
+      nombre: '<script>alert("xss")</script>',
+    });
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });

@@ -124,10 +124,11 @@ export async function POST(request: NextRequest) {
     results.complaint = true;
 
     // 2. Send confirmation to the user
-    const confirmationHtml = buildUserConfirmationHtml(
+    const confirmationHtml = buildUserConfirmationHtml({
       nombre,
-      analysis.empresa
-    );
+      analysis,
+      complaintText,
+    });
 
     const { error: confirmError } = await resend.emails.send({
       from: FROM_EMAIL,
