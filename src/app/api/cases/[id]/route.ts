@@ -3,6 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import {
+  createInAppNotification,
+  buildStatusChangeNotification,
+} from "@/lib/notifications";
 
 import { updateSchema, updateCaseById } from "@/lib/cases-utils";
 
@@ -65,6 +69,22 @@ export async function PATCH(
       { error: "Error al actualizar el caso." },
       { status: 500 }
     );
+  }
+
+  // Fire-and-forget: create in-app notification on status change
+  if (parsed.data.status && result.data) {
+    const caseRow = result.data as { empresa?: string | null };
+    const { titulo, mensaje } = buildStatusChangeNotification(
+      parsed.data.status,
+      caseRow.empresa ?? null
+    );
+    void createInAppNotification({
+      userId,
+      caseId: id,
+      tipo: "status_change",
+      titulo,
+      mensaje,
+    });
   }
 
   return NextResponse.json(result.data);

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Scale, Info, ArrowLeft } from "lucide-react";
+import { Scale, Info, ArrowLeft, Bell } from "lucide-react";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
@@ -275,6 +275,13 @@ export default function Home() {
                   className="hidden items-center rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 sm:flex"
                 >
                   Mis casos
+                </a>
+                <a
+                  href="/notificaciones"
+                  className="relative rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50"
+                  title="Notificaciones"
+                >
+                  <Bell className="h-4 w-4" />
                 </a>
                 <UserButton />
               </>

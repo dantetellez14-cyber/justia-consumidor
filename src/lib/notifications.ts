@@ -152,6 +152,86 @@ async function findConsumerEmail(
   }
 }
 
+// ── In-app notification helpers ───────────────────────────────────────────────
+
+export type InAppNotificationType =
+  | "company_response"
+  | "status_change"
+  | "ai_update"
+  | "escalacion"
+  | "sistema";
+
+interface InAppNotificationParams {
+  readonly userId: string;
+  readonly caseId?: string;
+  readonly tipo: InAppNotificationType;
+  readonly titulo: string;
+  readonly mensaje: string;
+}
+
+/**
+ * Insert a row in the notifications table.
+ * Fire-and-forget — never throws.
+ */
+export async function createInAppNotification(
+  params: InAppNotificationParams
+): Promise<void> {
+  try {
+    await supabase.from("notifications").insert({
+      user_id: params.userId,
+      case_id: params.caseId ?? null,
+      tipo: params.tipo,
+      titulo: params.titulo,
+      mensaje: params.mensaje,
+    });
+  } catch (err) {
+    console.error(
+      "[notifications] Error creating in-app notification:",
+      err instanceof Error ? err.message : err
+    );
+  }
+}
+
+/** Titles and messages for each case status transition. */
+export function buildStatusChangeNotification(
+  status: string,
+  empresa: string | null
+): { titulo: string; mensaje: string } {
+  const company = empresa ?? "la empresa";
+  switch (status) {
+    case "reclamo_generado":
+      return {
+        titulo: "Reclamo generado",
+        mensaje: `Tu documento de reclamo formal contra ${company} está listo para enviar.`,
+      };
+    case "enviado_empresa":
+      return {
+        titulo: "Reclamo enviado",
+        mensaje: `Tu reclamo fue enviado formalmente a ${company}. Esperamos su respuesta.`,
+      };
+    case "en_mediacion":
+      return {
+        titulo: "Mediación iniciada",
+        mensaje: `El proceso de mediación con ${company} está activo. Te notificaremos novedades.`,
+      };
+    case "escalado":
+      return {
+        titulo: "Caso escalado",
+        mensaje: `Tu caso fue escalado al organismo de defensa del consumidor para mayor seguimiento.`,
+      };
+    case "resuelto":
+      return {
+        titulo: "¡Caso resuelto!",
+        mensaje: `Tu reclamo contra ${company} fue resuelto. Consultá los detalles en tu caso.`,
+      };
+    default:
+      return {
+        titulo: "Actualización de caso",
+        mensaje: `El estado de tu caso con ${company} fue actualizado.`,
+      };
+  }
+}
+
 export async function notifyConsumerResponse(
   params: NotifyConsumerParams
 ): Promise<void> {
