@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <clipPath id="clip">
+      <rect width="32" height="32" rx="6" ry="6" />
+    </clipPath>
+  </defs>
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" ry="6" fill="url(#bg)" />
+  <!-- Scale icon (lucide-scale simplified) centered -->
+  <g transform="translate(6, 6)" clip-path="url(#clip)">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Pole -->
+      <line x1="12" y1="3" x2="12" y2="21"/>
+      <!-- Base -->
+      <path d="M8 21h8"/>
+      <!-- Beam -->
+      <line x1="3" y1="7" x2="21" y2="7"/>
+      <!-- Left scale -->
+      <path d="M3 7l3 6c0 1.657-1.343 3-3 3s-3-1.343-3-3l3-6z" transform="translate(0,0)"/>
+      <path d="M3 7c0 0 0 6 0 6" style="display:none"/>
+      <!-- Left pan arc -->
+      <path d="M3 7 L6 13 A3 3 0 0 1 0 13 Z"/>
+      <!-- Right pan arc -->
+      <path d="M21 7 L24 13 A3 3 0 0 1 18 13 Z"/>
+    </svg>
+  </g>
+</svg>
