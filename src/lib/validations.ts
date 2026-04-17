@@ -56,6 +56,8 @@ export const sendComplaintSchema = z.object({
   empresaEmail: z.string().email("Email de empresa inválido."),
   complaintText: z.string().min(10, "El texto del reclamo es muy corto."),
   caseId: z.string().uuid().nullable(),
+  /** When true, send the complaint to the consumer's own email (skips domain check). */
+  sendCopyToConsumer: z.boolean().optional(),
 });
 
 export type SendComplaintInput = z.infer<typeof sendComplaintSchema>;

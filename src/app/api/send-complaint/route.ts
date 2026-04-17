@@ -71,16 +71,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { analysis, nombre, email, empresaEmail, complaintText, caseId } =
+  const { analysis, nombre, email, empresaEmail, complaintText, caseId, sendCopyToConsumer } =
     parsed.data;
 
-  const { emailMatchesCompany } = await import("@/lib/empresa");
-  if (!emailMatchesCompany(empresaEmail, analysis.empresa)) {
-    return NextResponse.json(
-      { error: "El dominio del correo no coincide con el nombre de la empresa." },
-      { status: 400 }
-    );
+  // When sending a copy to the consumer (test/self-send mode), skip domain validation
+  if (!sendCopyToConsumer) {
+    const { emailMatchesCompany } = await import("@/lib/empresa");
+    if (!emailMatchesCompany(empresaEmail, analysis.empresa)) {
+      return NextResponse.json(
+        { error: "El dominio del correo no coincide con el nombre de la empresa." },
+        { status: 400 }
+      );
+    }
   }
+
+  // In copy-to-consumer mode, deliver to the user's own address
+  const deliveryEmail = sendCopyToConsumer ? email : empresaEmail;
 
   const results = { complaint: false, confirmation: false };
 
@@ -95,11 +101,15 @@ export async function POST(request: NextRequest) {
 
     const resend = getResend();
 
+    const emailSubject = sendCopyToConsumer
+      ? `[COPIA PARA VOS] Reclamo Formal - ${analysis.producto_servicio}`
+      : `Reclamo Formal - ${analysis.producto_servicio} - ${nombre}`;
+
     const { error: complaintError } = await resend.emails.send({
       from: FROM_EMAIL,
-      to: [empresaEmail],
+      to: [deliveryEmail],
       replyTo: email,
-      subject: `Reclamo Formal - ${analysis.producto_servicio} - ${nombre}`,
+      subject: emailSubject,
       html: complaintHtml,
     });
 

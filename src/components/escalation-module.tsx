@@ -17,6 +17,7 @@ import {
   ArrowRight,
   Info,
   Star,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -234,6 +235,30 @@ export function EscalationModule({
   const [fechaReclamoDirecto, setFechaReclamoDirecto] = useState("");
   const [numeroReclamo, setNumeroReclamo] = useState("");
   const [expandedRequisitos, setExpandedRequisitos] = useState(false);
+
+  const loadFormExample = () => {
+    const isMX = analysis.pais_detectado === "MX";
+    setNombreCompleto("Dante Tellez");
+    setDocumento(isMX ? "TELD900101HDFLLB03" : "37654321");
+    setEmail("dantetellezao@gmail.com");
+    setTelefono(isMX ? "+52 55 8888 9999" : "+54 11 5555 7777");
+    setDomicilio(
+      isMX
+        ? "Av. Insurgentes Sur 1234, Col. Del Valle, CDMX, CP 03100"
+        : "Av. Corrientes 1234, Piso 3, CABA, CP 1043"
+    );
+    setEmpresaDomicilio(
+      isMX
+        ? "Insurgentes Sur 3579, CDMX"
+        : "Viamonte 401, CABA"
+    );
+    setEmpresaId(isMX ? "MLA820518B34" : "30-66666670-9");
+    setResolucion(
+      "Devolución íntegra del importe abonado más compensación por daños y perjuicios ocasionados por la negativa infundada de la empresa."
+    );
+    setFechaReclamoDirecto("05/04/2026");
+    setNumeroReclamo("REC-2026-88421");
+  };
 
   const channels = useMemo(
     () => getChannelsForCountry(analysis.pais_detectado),
@@ -472,11 +497,21 @@ export function EscalationModule({
               exit={{ opacity: 0, x: -20 }}
               className="space-y-4"
             >
-              <p className="text-xs text-slate-500">
-                Completa tus datos personales. Estos se usaran para generar el
-                documento de presentacion ante{" "}
-                <strong>{selectedInfo?.nombre}</strong>.
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-500">
+                  Completa tus datos personales. Estos se usaran para generar el
+                  documento de presentacion ante{" "}
+                  <strong>{selectedInfo?.nombre}</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={loadFormExample}
+                  className="ml-3 flex shrink-0 items-center gap-1.5 rounded-md bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-100"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Cargar ejemplo
+                </button>
+              </div>
 
               {/* Consumer data */}
               <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">

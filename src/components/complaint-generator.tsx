@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CaseAnalysis } from "@/lib/types";
-import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2 } from "lucide-react";
+import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2, Sparkles, Copy } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
@@ -69,13 +69,25 @@ Domicilio: [Completar]
 Teléfono: [Completar]`;
 }
 
+// Sample data for quick testing
+const TEST_NOMBRE = "Dante Tellez";
+const TEST_EMAIL = "dantetellezao@gmail.com";
+
 export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
   const [saved, setSaved] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendingCopy, setSendingCopy] = useState(false);
   const [sendResult, setSendResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copyResult, setCopyResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const loadExample = () => {
+    setNombre(TEST_NOMBRE);
+    setEmail(TEST_EMAIL);
+    setEmpresaEmail(`atencion@${analysis.empresa.toLowerCase().replace(/[\s.]/g, "").slice(0, 20)}.com.ar`);
+  };
 
   const complaintText = generateComplaintText(analysis, nombre, email);
 
@@ -135,6 +147,41 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
     }
   };
 
+  /** Send the complaint to the consumer's own email — used for testing / personal copy. */
+  const handleSendCopyToMe = async () => {
+    if (!nombre.trim() || !email.trim()) return;
+    setSendingCopy(true);
+    setCopyResult(null);
+    try {
+      const res = await fetch("/api/send-complaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis,
+          nombre,
+          email,
+          empresaEmail: email, // destination is the consumer's own address
+          complaintText,
+          caseId,
+          sendCopyToConsumer: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCopyResult({ success: false, message: data.error });
+      } else {
+        setCopyResult({
+          success: true,
+          message: `Copia enviada a ${email}. Revisá tu bandeja de entrada.`,
+        });
+      }
+    } catch {
+      setCopyResult({ success: false, message: "Error de conexion. Intenta de nuevo." });
+    } finally {
+      setSendingCopy(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -146,7 +193,7 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
           <div className="rounded-lg bg-blue-50 p-2">
             <FileText className="h-5 w-5 text-blue-600" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="text-lg font-bold text-slate-800">
               Reclamo Formal Generado
             </h3>
@@ -154,6 +201,15 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
               Completá tus datos y descargá la nota lista para enviar.
             </p>
           </div>
+          {/* Quick-fill for testing */}
+          <button
+            type="button"
+            onClick={loadExample}
+            className="flex shrink-0 items-center gap-1.5 rounded-md bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-100"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Cargar ejemplo
+          </button>
         </div>
 
         {/* User info fields */}
@@ -235,6 +291,29 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
               {sending ? "Enviando..." : sendResult?.success ? "Enviado" : "Enviar a la empresa"}
             </button>
           )}
+
+          {/* "Send copy to me" — works for testing, no domain check */}
+          {nombre.trim() && email.trim() && (
+            <button
+              onClick={handleSendCopyToMe}
+              disabled={sendingCopy || copyResult?.success === true}
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
+            >
+              {sendingCopy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : copyResult?.success ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+              {sendingCopy
+                ? "Enviando..."
+                : copyResult?.success
+                  ? "Copia enviada"
+                  : "Recibir copia en mi correo"}
+            </button>
+          )}
+
           <button
             onClick={handleDownload}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg"
@@ -275,6 +354,26 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
               <AlertCircle className="h-4 w-4 shrink-0" />
             )}
             {sendResult.message}
+          </motion.div>
+        )}
+
+        {/* Copy-to-me result feedback */}
+        {copyResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-3 flex items-center gap-2 rounded-lg border p-3 text-sm ${
+              copyResult.success
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {copyResult.success ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0" />
+            )}
+            {copyResult.message}
           </motion.div>
         )}
       </div>
