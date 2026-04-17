@@ -17,9 +17,14 @@ function getResend(): Resend {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Use a verified Resend sender domain. The fallback uses Resend's own test
+// domain (works while justia-consumidor.com is pending verification — only
+// delivers to the Resend account owner's address during test mode).
+// Set RESEND_FROM_EMAIL in Vercel env once your domain is verified:
+//   JustIA Consumidor <noreply@justia-consumidor.com>
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL ||
-  "JustIA Consumidor <noreply@justia-consumidor.com>";
+  "JustIA Consumidor <onboarding@resend.dev>";
 
 export async function POST(request: NextRequest) {
   // Rate limit: 5 emails per hour per IP

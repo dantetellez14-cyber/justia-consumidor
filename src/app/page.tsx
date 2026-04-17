@@ -227,20 +227,28 @@ export default function Home() {
                 }
               }}
               className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              title="Paso anterior"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <div className="rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-2">
-              <Scale className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800">
-                JustIA Consumidor
-              </h1>
-              <p className="text-xs text-slate-400">
-                {STEP_LABELS[step]}
-              </p>
-            </div>
+            {/* Logo — click goes directly to welcome/home */}
+            <button
+              onClick={handleRestart}
+              className="flex items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-slate-100"
+              title="Ir al inicio"
+            >
+              <div className="rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-2">
+                <Scale className="h-5 w-5 text-white" />
+              </div>
+              <div className="text-left">
+                <h1 className="text-lg font-bold text-slate-800 leading-tight">
+                  JustIA Consumidor
+                </h1>
+                <p className="text-xs text-slate-400">
+                  {STEP_LABELS[step]}
+                </p>
+              </div>
+            </button>
           </div>
           <div className="flex items-center gap-3">
             {/* Step indicators */}
@@ -261,6 +269,17 @@ export default function Home() {
                 />
               ))}
             </div>
+            {/* Nuevo caso — only shown after at least one analysis */}
+            {currentStepIndex >= 2 && (
+              <button
+                onClick={handleRestart}
+                className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50 sm:flex"
+                title="Comenzar un nuevo reclamo"
+              >
+                <Scale className="h-4 w-4" />
+                Nuevo caso
+              </button>
+            )}
             <button
               onClick={() => setModalOpen(true)}
               className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50"
