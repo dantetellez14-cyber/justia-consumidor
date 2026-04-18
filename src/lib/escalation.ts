@@ -72,7 +72,7 @@ const CHANNELS: ReadonlyArray<EscalationChannelInfo> = [
     descripcion:
       "Presenta una queja formal ante la Procuraduría Federal del Consumidor. " +
       "Un conciliador de PROFECO mediará entre tú y la empresa.",
-    url: "https://quejaenlinea.profeco.gob.mx/",
+    url: "https://www.gob.mx/profeco/tramites/queja-ante-profeco",
     pais: "MX",
     tipo: "queja",
     obligatorio: false,
@@ -528,7 +528,7 @@ export function getFilingInstructions(
   switch (channel) {
     case "profeco_queja":
       return [
-        "Ingresa a quejaenlinea.profeco.gob.mx",
+        "Ingresa a gob.mx/profeco/tramites/queja-ante-profeco",
         "Crea una cuenta o inicia sesión con tu CURP",
         "Selecciona 'Nueva Queja'",
         "Llena el formulario con los datos del proveedor (usa el documento generado como referencia)",

@@ -158,7 +158,7 @@ describe("getFilingInstructions", () => {
   it("returns steps for PROFECO queja", () => {
     const steps = getFilingInstructions("profeco_queja");
     expect(steps.length).toBeGreaterThan(5);
-    expect(steps[0]).toContain("quejaenlinea.profeco.gob.mx");
+    expect(steps[0]).toContain("gob.mx/profeco");
   });
 
   it("returns steps for Concilianet", () => {
