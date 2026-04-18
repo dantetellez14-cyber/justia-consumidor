@@ -102,6 +102,4 @@ export default withSentryConfig(nextConfig, {
   sourcemaps: {
     disable: !process.env.SENTRY_AUTH_TOKEN,
   },
-  // Hide source maps from the browser bundle (keep them server-side only)
-  hideSourceMaps: true,
 });
