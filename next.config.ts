@@ -97,8 +97,11 @@ export default withSentryConfig(nextConfig, {
   tunnelRoute: "/monitoring",
   // Suppress logs during build
   silent: !process.env.CI,
-  // Skip source map upload (no auth token needed for basic setup)
+  // Upload source maps only when SENTRY_AUTH_TOKEN is available (production / Vercel CI).
+  // Local dev builds without the token will skip upload automatically.
   sourcemaps: {
-    disable: true,
+    disable: !process.env.SENTRY_AUTH_TOKEN,
   },
+  // Hide source maps from the browser bundle (keep them server-side only)
+  hideSourceMaps: true,
 });
