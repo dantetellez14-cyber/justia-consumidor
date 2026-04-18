@@ -11,6 +11,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabase } from "@/lib/supabase";
 import type { JurisprudenciaCase } from "@/lib/types";
+import { logError, createRouteLogger } from "@/lib/logger";
+
+const log = createRouteLogger("/api/jurisprudencia-fallback");
 
 const querySchema = z.object({
   pais: z.enum(["AR", "MX"]),
@@ -41,12 +44,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     .limit(20);
 
   if (error) {
-    console.error("[jurisprudencia-fallback] Supabase error:", error.message);
+    logError("Supabase error in jurisprudencia-fallback", error, { pais });
     return NextResponse.json(
       { error: "Error al cargar jurisprudencia." },
       { status: 500 }
     );
   }
+
+  log.info({ pais, count: data?.length ?? 0 }, "Jurisprudencia fallback served");
 
   return NextResponse.json(
     { cases: (data ?? []) as JurisprudenciaCase[] },

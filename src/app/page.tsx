@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Scale, Info, ArrowLeft, Bell } from "lucide-react";
+import { Scale, Info, ArrowLeft } from "lucide-react";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
@@ -24,6 +24,7 @@ import { EscalationModule } from "@/components/escalation-module";
 import { CaseTracker } from "@/components/case-tracker";
 import { ComplaintStatsPanel } from "@/components/complaint-stats-panel";
 import { FeedbackRating } from "@/components/feedback-rating";
+import { NotificationBell } from "@/components/notification-bell";
 
 type AppStep =
   | "welcome"
@@ -295,13 +296,7 @@ export default function Home() {
                 >
                   Mis casos
                 </a>
-                <a
-                  href="/notificaciones"
-                  className="relative rounded-lg border border-slate-200 p-2 text-slate-600 transition-colors hover:bg-slate-50"
-                  title="Notificaciones"
-                >
-                  <Bell className="h-4 w-4" />
-                </a>
+                <NotificationBell />
                 <UserButton />
               </>
             )}

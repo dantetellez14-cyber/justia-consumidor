@@ -16,6 +16,7 @@ import {
   buildCompanyResponseAlertHtml,
 } from "./email/templates";
 import { normalizeEmpresaName } from "./empresa";
+import { logError } from "./logger";
 
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL ||
@@ -86,11 +87,7 @@ export async function notifyEmpresaNewComplaint(
       html,
     });
   } catch (err) {
-    // Fire-and-forget: log but don't throw
-    console.error(
-      "[notifications] Error notifying empresa:",
-      err instanceof Error ? err.message : err
-    );
+    logError("Error notifying empresa", err, { context: "notifyEmpresaNewComplaint" });
   }
 }
 
@@ -187,10 +184,7 @@ export async function createInAppNotification(
       mensaje: params.mensaje,
     });
   } catch (err) {
-    console.error(
-      "[notifications] Error creating in-app notification:",
-      err instanceof Error ? err.message : err
-    );
+    logError("Error creating in-app notification", err, { context: "createInAppNotification" });
   }
 }
 
@@ -297,10 +291,7 @@ export async function notifyEmpresaWelcome(
       html,
     });
   } catch (err) {
-    console.error(
-      "[notifications] Error sending empresa welcome email:",
-      err instanceof Error ? err.message : err
-    );
+    logError("Error sending empresa welcome email", err, { context: "notifyEmpresaWelcome" });
   }
 }
 
@@ -359,9 +350,6 @@ export async function notifyConsumerResponse(
       mensaje: IN_APP_MESSAGES[params.tipoRespuesta] ?? `${params.empresaNombre} respondió tu reclamo.`,
     });
   } catch (err) {
-    console.error(
-      "[notifications] Error notifying consumer:",
-      err instanceof Error ? err.message : err
-    );
+    logError("Error notifying consumer", err, { context: "notifyConsumerResponse" });
   }
 }
