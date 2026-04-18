@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { CaseAnalysis } from "@/lib/types";
 import {
   Landmark,
@@ -311,11 +311,21 @@ export function EscalationModule({
   const canProceedForm =
     nombreCompleto.trim() && documento.trim() && email.trim();
 
+  // Snapshot of formData captured at the moment the user clicks "Generar documento".
+  // Avoids including the inline formData object (new reference every render) as a
+  // useMemo dependency, which would re-run the generator on every keystroke.
+  const [formDataSnapshot, setFormDataSnapshot] =
+    useState<EscalationFormData | null>(null);
+
+  const advanceToDocument = useCallback(() => {
+    setFormDataSnapshot({ ...formData });
+    setWizardStep("document");
+  }, [formData]);
+
   const generatedDoc = useMemo(() => {
-    if (!selectedChannel) return null;
-    return generateEscalationDocument(selectedChannel, formData, analysis);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, wizardStep]);
+    if (!selectedChannel || !formDataSnapshot) return null;
+    return generateEscalationDocument(selectedChannel, formDataSnapshot, analysis);
+  }, [selectedChannel, formDataSnapshot, analysis]);
 
   const instructions = useMemo(() => {
     if (!selectedChannel) return [];
@@ -636,7 +646,7 @@ export function EscalationModule({
                   Atras
                 </button>
                 <button
-                  onClick={() => setWizardStep("document")}
+                  onClick={advanceToDocument}
                   disabled={!canProceedForm}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
                 >
