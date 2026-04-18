@@ -1,3 +1,4 @@
+import path from "path";
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
@@ -13,20 +14,20 @@ const cspDirectives = [
   // Styles: self + inline (Tailwind, Clerk components)
   "style-src 'self' 'unsafe-inline'",
 
-  // Images: self + Clerk avatars + data URIs
-  "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.accounts.dev",
+  // Images: self + Clerk avatars + data URIs + Spline textures
+  "img-src 'self' data: blob: https://img.clerk.com https://*.clerk.accounts.dev https://prod.spline.design",
 
   // Fonts: self + Google Fonts (if used)
   "font-src 'self' data:",
 
-  // API connections: self + Supabase + Clerk + PostHog + Sentry + Pinecone
-  "connect-src 'self' https://*.supabase.co https://*.clerk.accounts.dev https://api.clerk.com https://us.i.posthog.com https://*.ingest.us.sentry.io https://*.pinecone.io https://accepted-newt-92323.upstash.io",
+  // API connections: self + Supabase + Clerk + PostHog + Sentry + Pinecone + Spline
+  "connect-src 'self' https://*.supabase.co https://*.clerk.accounts.dev https://api.clerk.com https://us.i.posthog.com https://*.ingest.us.sentry.io https://*.pinecone.io https://accepted-newt-92323.upstash.io https://prod.spline.design",
 
   // Frames: Clerk CAPTCHA + Cloudflare challenges
   "frame-src 'self' https://*.clerk.accounts.dev https://challenges.cloudflare.com",
 
-  // Workers: self + blob (PostHog, Sentry replay)
-  "worker-src 'self' blob:",
+  // Workers: self + blob (PostHog, Sentry replay, Spline WebGL)
+  "worker-src 'self' blob: https://prod.spline.design",
 
   // Object/media: none (no Flash, no plugins)
   "object-src 'none'",
@@ -71,25 +72,29 @@ const securityHeaders = [
   },
 ];
 
-const nextConfig: NextConfig = {
-  async headers() {
-    return [
-      {
-        // Apply security headers to all routes
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-      {
-        // Service worker: allow it to control the full origin scope
-        source: "/sw.js",
-        headers: [
-          { key: "Service-Worker-Allowed", value: "/" },
-          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
-        ],
-      },
-    ];
+const isDev = process.env.NODE_ENV === "development";
+
+// In dev: omit X-Frame-Options so preview/embedded browser tools can load the app
+const routeHeaders = isDev
+  ? securityHeaders.filter((h) => h.key !== "X-Frame-Options")
+  : securityHeaders;
+
+const getHeaderRules = () => [
+  { source: "/(.*)", headers: routeHeaders },
+  {
+    source: "/sw.js",
+    headers: [
+      { key: "Service-Worker-Allowed", value: "/" },
+      { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+      { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+    ],
   },
+];
+
+const nextConfig: NextConfig = {
+  // Fix workspace root detection when there is a lockfile in a parent directory
+  outputFileTracingRoot: path.resolve(__dirname),
+  headers: getHeaderRules,
 };
 
 export default withSentryConfig(nextConfig, {
