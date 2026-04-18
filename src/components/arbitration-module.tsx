@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CaseAnalysis } from "@/lib/types";
-import { Users, MessageSquare, CheckCircle, AlertCircle, XCircle, MinusCircle, Sparkles } from "lucide-react";
+import { Users, MessageSquare, CheckCircle, AlertCircle, XCircle, MinusCircle, Sparkles, TrendingUp, ArrowUpRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Props {
@@ -20,6 +20,12 @@ interface VerdictData {
   companyQuote?: string;
   recommendation: string;
   legalBasis: string;
+  // Fields from Gemini API
+  puntosFuertes?: string[];
+  puntosDebiles?: string[];
+  escalar?: boolean;
+  probabilidadAjustada?: number;
+  source?: "gemini" | "fallback";
 }
 
 /** Keyword-based tone analysis for custom company responses. */
@@ -169,16 +175,76 @@ export function ArbitrationModule({ analysis, onNext }: Props) {
     companyResponse !== null &&
     (companyResponse !== "custom" || customResponse.trim().length >= 15);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!companyResponse) return;
     setLoading(true);
-    // Simulate AI deliberation delay
-    setTimeout(() => {
+
+    // For "partial", send a descriptive text so the AI has context
+    const responseText =
+      companyResponse === "no_response"
+        ? ""
+        : companyResponse === "partial"
+          ? "La empresa ofreció una solución parcial que no cubre la totalidad del monto reclamado."
+          : customResponse;
+
+    try {
+      const res = await fetch("/api/arbitrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis,
+          companyResponse: responseText || "Sin respuesta",
+          responseMode: companyResponse === "no_response" ? "no_response" : "custom",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Fall back to local keyword analysis on API error
+        const result = buildVerdict(companyResponse, customResponse, analysis, moneda);
+        setVerdict(result);
+      } else {
+        // Map API response → VerdictData
+        const resultado: string = data.resultado ?? "parcial";
+        const iconMap: Record<string, VerdictData["icon"]> = {
+          favorable: "check",
+          sin_respuesta: "check",
+          parcial: "minus",
+          desfavorable: "x",
+        };
+        const colorMap2: Record<string, VerdictData["color"]> = {
+          favorable: "emerald",
+          sin_respuesta: "emerald",
+          parcial: "amber",
+          desfavorable: "red",
+        };
+        setVerdict({
+          icon: iconMap[resultado] ?? "minus",
+          color: colorMap2[resultado] ?? "amber",
+          title: data.titulo ?? "Veredicto del árbitro IA",
+          summary: data.resumen ?? "",
+          companyQuote:
+            companyResponse === "custom" && customResponse.trim().length > 0
+              ? customResponse.trim().slice(0, 220) + (customResponse.trim().length > 220 ? "…" : "")
+              : undefined,
+          recommendation: data.recomendacion ?? "",
+          legalBasis: analysis.analisis_legal,
+          puntosFuertes: data.puntos_fuertes ?? [],
+          puntosDebiles: data.puntos_debiles ?? [],
+          escalar: data.escalar ?? false,
+          probabilidadAjustada: data.probabilidad_exito_ajustada,
+          source: data.source,
+        });
+      }
+    } catch {
+      // Network error — fall back to local analysis
       const result = buildVerdict(companyResponse, customResponse, analysis, moneda);
       setVerdict(result);
+    } finally {
       setLoading(false);
       setShowVerdict(true);
-    }, 2500);
+    }
   };
 
   return (
@@ -419,6 +485,66 @@ function VerdictPanel({
         </div>
       </div>
 
+      {/* Puntos fuertes y débiles (from Gemini) */}
+      {((verdict.puntosFuertes && verdict.puntosFuertes.length > 0) ||
+        (verdict.puntosDebiles && verdict.puntosDebiles.length > 0)) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {verdict.puntosFuertes && verdict.puntosFuertes.length > 0 && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-emerald-700">
+                ✅ A favor del consumidor
+              </p>
+              <ul className="space-y-1">
+                {verdict.puntosFuertes.map((p, i) => (
+                  <li key={i} className="text-xs text-emerald-800">
+                    • {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {verdict.puntosDebiles && verdict.puntosDebiles.length > 0 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-red-700">
+                ⚠️ Puntos débiles del reclamo
+              </p>
+              <ul className="space-y-1">
+                {verdict.puntosDebiles.map((p, i) => (
+                  <li key={i} className="text-xs text-red-800">
+                    • {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Adjusted probability */}
+      {verdict.probabilidadAjustada !== undefined && (
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <TrendingUp className="h-4 w-4 shrink-0 text-blue-500" />
+          <div>
+            <p className="text-xs font-semibold text-slate-600">
+              Probabilidad de éxito ajustada por el árbitro
+            </p>
+            <p className="text-sm font-bold text-blue-700">
+              {Math.round(verdict.probabilidadAjustada * 100)}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Escalar CTA */}
+      {verdict.escalar && (
+        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+          <p className="text-xs text-blue-800">
+            <strong>Recomendación del árbitro:</strong> Escalar este caso al organismo regulador de tu país para mayor fuerza legal.
+          </p>
+        </div>
+      )}
+
       {/* Legal basis */}
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
@@ -427,10 +553,13 @@ function VerdictPanel({
         <p className="text-sm text-slate-600">{legalBasis}</p>
       </div>
 
-      {/* Disclaimer */}
+      {/* Source badge + Disclaimer */}
       <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
         <p className="text-xs text-amber-700">
+          {verdict.source === "gemini"
+            ? "Veredicto generado por Gemini AI. "
+            : "Veredicto generado por análisis local. "}
           Esta evaluación es orientativa y no vinculante. Para mayor efectividad,
           podés presentarla ante el organismo de defensa del consumidor de tu
           jurisdicción.
