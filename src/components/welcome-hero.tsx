@@ -4,6 +4,9 @@ import { Scale, Shield, Clock, FileText, Users, ArrowRight, Building2 } from "lu
 import { motion } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { SplineScene } from "@/components/ui/splite";
+import { Spotlight } from "@/components/ui/spotlight";
+import { Card } from "@/components/ui/card";
 
 interface Props {
   readonly onStart: () => void;
@@ -82,47 +85,80 @@ export function WelcomeHero({ onStart }: Props) {
         </div>
       </header>
 
-      {/* Hero Section */}
       <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mx-auto max-w-6xl px-6 py-10">
+
+          {/* ── 3D Hero Card ── */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center"
+            transition={{ duration: 0.6 }}
           >
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg shadow-blue-200">
-              <Shield className="h-10 w-10 text-white" />
-            </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-              Defendé tus derechos como consumidor
-            </h1>
-            <h2 className="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 sm:text-5xl">
-              de forma simple y gratuita
-            </h2>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-500">
-              La justicia no debe ser un laberinto, sino un camino con señales claras.
-              Nuestra IA te asesora, genera tu reclamo y te acompaña hasta la resolución.
-            </p>
+            <Card className="w-full h-[520px] bg-black/[0.96] relative overflow-hidden border-0 shadow-2xl">
+              <Spotlight
+                className="-top-40 left-0 md:left-60 md:-top-20"
+                fill="white"
+              />
 
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={onStart}
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-blue-200 transition-shadow hover:shadow-xl hover:shadow-blue-300"
-            >
-              Comenzar tu reclamo
-              <ArrowRight className="h-5 w-5" />
-            </motion.button>
+              <div className="flex h-full flex-col md:flex-row">
+                {/* Left — text content */}
+                <div className="flex flex-1 flex-col justify-center p-8 md:p-12 relative z-10">
+                  {/* Badge */}
+                  <div className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5">
+                    <Shield className="h-3.5 w-3.5 text-indigo-400" />
+                    <span className="text-xs font-medium text-indigo-300">
+                      IA Legal · Gratuito
+                    </span>
+                  </div>
 
-            <button
-              onClick={onStart}
-              className="mt-3 block mx-auto text-sm text-slate-400 underline underline-offset-2 hover:text-slate-600"
-            >
-              Ver cómo funciona
-            </button>
+                  <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-white md:text-5xl">
+                    Defendé tus derechos{" "}
+                    <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                      como consumidor
+                    </span>
+                  </h1>
+
+                  <p className="mt-2 text-2xl font-bold text-neutral-300 md:text-3xl">
+                    de forma simple y gratuita
+                  </p>
+
+                  <p className="mt-5 max-w-md text-base leading-relaxed text-neutral-400">
+                    La justicia no debe ser un laberinto, sino un camino con señales claras.
+                    Nuestra IA te asesora, genera tu reclamo y te acompaña hasta la resolución.
+                  </p>
+
+                  <div className="mt-8 flex flex-wrap gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={onStart}
+                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-900/40 transition-shadow hover:shadow-xl"
+                    >
+                      Comenzar tu reclamo
+                      <ArrowRight className="h-4 w-4" />
+                    </motion.button>
+
+                    <button
+                      onClick={onStart}
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-base font-medium text-neutral-300 transition-colors hover:bg-white/10"
+                    >
+                      Ver cómo funciona
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right — Spline robot */}
+                <div className="relative flex-1 min-h-[260px] md:min-h-0">
+                  <SplineScene
+                    scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
+            </Card>
           </motion.div>
 
-          {/* How it works */}
+          {/* ── How it works ── */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -150,7 +186,7 @@ export function WelcomeHero({ onStart }: Props) {
             </div>
           </motion.div>
 
-          {/* Features Grid */}
+          {/* ── Features Grid ── */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -181,7 +217,7 @@ export function WelcomeHero({ onStart }: Props) {
             </div>
           </motion.div>
 
-          {/* Company CTA */}
+          {/* ── Company CTA ── */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -194,9 +230,7 @@ export function WelcomeHero({ onStart }: Props) {
                   <Building2 className="h-7 w-7 text-white" />
                 </div>
                 <div className="flex-1 text-center sm:text-left">
-                  <h3 className="text-lg font-bold text-slate-800">
-                    Sos una empresa?
-                  </h3>
+                  <h3 className="text-lg font-bold text-slate-800">Sos una empresa?</h3>
                   <p className="mt-1 text-sm text-slate-500">
                     Gestiona reclamos de forma eficiente, reduce litigios y mejora tu reputacion.
                     Accede al panel empresarial para responder reclamos antes de que escalen.
@@ -213,7 +247,7 @@ export function WelcomeHero({ onStart }: Props) {
             </div>
           </motion.div>
 
-          {/* Trust bar */}
+          {/* ── Trust bar ── */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -226,6 +260,7 @@ export function WelcomeHero({ onStart }: Props) {
               Tu información se procesa de forma segura y local.
             </p>
           </motion.div>
+
         </div>
       </main>
 

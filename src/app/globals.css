@@ -3,6 +3,21 @@
 :root {
   --background: #f8fafc;
   --foreground: #1e293b;
+
+  /* shadcn/card tokens */
+  --card: #ffffff;
+  --card-foreground: #1e293b;
+  --muted-foreground: #64748b;
+}
+
+/* ── Spotlight animation ── */
+@keyframes spotlight {
+  0%   { opacity: 0; transform: translate(-72%, -62%) scale(0.5); }
+  100% { opacity: 1; transform: translate(-50%, -40%) scale(1); }
+}
+
+@theme {
+  --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
 }
 
 body {
