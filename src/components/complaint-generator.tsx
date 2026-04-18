@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CaseAnalysis } from "@/lib/types";
-import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2, Sparkles, Copy } from "lucide-react";
+import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2, Sparkles, Copy, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Props {
@@ -101,6 +101,121 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    const fecha = new Date().toLocaleDateString("es-AR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const moneda = analysis.pais_detectado === "MX" ? "MXN" : "ARS";
+
+    const printHtml = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reclamo Formal — ${analysis.empresa}</title>
+  <style>
+    @page { size: A4; margin: 2.5cm 3cm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #1a1a1a; line-height: 1.6; }
+    .header { text-align: center; border-bottom: 2px solid #1e40af; padding-bottom: 12pt; margin-bottom: 24pt; }
+    .header h1 { font-size: 16pt; color: #1e40af; letter-spacing: 2px; font-weight: bold; }
+    .header p { font-size: 10pt; color: #555; margin-top: 4pt; }
+    .meta { margin-bottom: 20pt; }
+    .meta p { margin-bottom: 3pt; }
+    .meta .label { font-weight: bold; }
+    h2 { font-size: 11pt; font-weight: bold; letter-spacing: 1px; color: #1e40af; margin: 20pt 0 8pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 4pt; }
+    p { margin-bottom: 8pt; text-align: justify; }
+    .summary-table { width: 100%; border-collapse: collapse; margin: 12pt 0; }
+    .summary-table td { padding: 6pt 10pt; border: 1px solid #d1d5db; font-size: 11pt; }
+    .summary-table td:first-child { font-weight: bold; background: #f8fafc; width: 40%; }
+    ol { padding-left: 20pt; margin-bottom: 10pt; }
+    ol li { margin-bottom: 4pt; }
+    .firma { margin-top: 48pt; }
+    .firma .line { border-top: 1px solid #333; width: 200pt; margin-top: 40pt; }
+    .firma p { margin-top: 4pt; font-size: 10pt; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>NOTA DE RECLAMO FORMAL</h1>
+    <p>Generado por JustIA Consumidor — justia-consumidor.com</p>
+  </div>
+
+  <div class="meta">
+    <p><span class="label">Fecha:</span> ${fecha}</p>
+    <p><span class="label">De:</span> ${nombre || "[Nombre del consumidor]"}</p>
+    <p><span class="label">Email:</span> ${email || "[Email de contacto]"}</p>
+    <p><span class="label">Para:</span> ${analysis.empresa}</p>
+  </div>
+
+  <p><strong>ASUNTO:</strong> Reclamo formal por incumplimiento — ${analysis.producto_servicio}</p>
+
+  <p>Estimados señores de <strong>${analysis.empresa}</strong>:</p>
+
+  <p>Por medio de la presente, me dirijo a ustedes en mi carácter de consumidor/a para formular un reclamo formal en relación con el siguiente hecho:</p>
+
+  <h2>DATOS DEL RECLAMO</h2>
+  <table class="summary-table">
+    <tr><td>Producto / Servicio</td><td>${analysis.producto_servicio}</td></tr>
+    <tr><td>Fecha del Incidente</td><td>${analysis.fecha_incidente}</td></tr>
+    <tr><td>Monto Reclamado</td><td>${moneda} $${analysis.monto_reclamo.toLocaleString()}</td></tr>
+  </table>
+
+  <h2>DESCRIPCIÓN DEL RECLAMO</h2>
+  <p>${analysis.core_grievance}</p>
+
+  <h2>FUNDAMENTO LEGAL</h2>
+  <p>${analysis.analisis_legal}</p>
+
+  <h2>SOLICITUD</h2>
+  <p>Solicito que en un plazo no mayor a <strong>10 (diez) días hábiles</strong> a partir de la recepción de la presente, se proceda a:</p>
+  <ol>
+    <li>Reconocer el incumplimiento señalado.</li>
+    <li>Ofrecer una solución satisfactoria que puede incluir: reparación, sustitución del producto o devolución íntegra del importe abonado.</li>
+    <li>Compensar los daños y perjuicios ocasionados conforme a derecho.</li>
+  </ol>
+  <p>De no obtener una respuesta favorable en el plazo indicado, me reservo el derecho de iniciar las acciones legales correspondientes ante los organismos de defensa del consumidor${analysis.pais_detectado === "MX" ? " (PROFECO)" : " (COPREC/Defensa del Consumidor)"} y/o la vía judicial.</p>
+
+  <p>Sin otro particular, saludo atentamente.</p>
+
+  <div class="firma">
+    <div class="line"></div>
+    <p><strong>${nombre || "[Nombre del consumidor]"}</strong></p>
+    <p>DNI/CURP: ___________________________</p>
+    <p>Domicilio: ___________________________</p>
+    <p>Teléfono: ___________________________</p>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    win.document.write(printHtml);
+    win.document.close();
+    win.focus();
+    // Give browser a moment to render before triggering print
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
+  };
+
+  const handleWhatsApp = () => {
+    const moneda = analysis.pais_detectado === "MX" ? "MXN" : "ARS";
+    const prob = Math.round(analysis.probabilidad_exito * 100);
+    const text =
+      `⚖️ *Reclamo formal contra ${analysis.empresa}*\n\n` +
+      `📌 *Producto/servicio:* ${analysis.producto_servicio}\n` +
+      `💰 *Monto reclamado:* ${moneda} $${analysis.monto_reclamo.toLocaleString()}\n` +
+      `📊 *Probabilidad de éxito:* ${prob}%\n\n` +
+      `_Generado con JustIA Consumidor — justia-consumidor.com_`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const handleCopy = () => {
@@ -315,11 +430,18 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
           )}
 
           <button
-            onClick={handleDownload}
+            onClick={handleDownloadPdf}
             className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg"
           >
             <Download className="h-4 w-4" />
-            Descargar Reclamo
+            Descargar PDF
+          </button>
+          <button
+            onClick={handleWhatsApp}
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg"
+          >
+            <Share2 className="h-4 w-4" />
+            Compartir por WhatsApp
           </button>
           <button
             onClick={handleEmail}
@@ -333,7 +455,15 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Save className="h-4 w-4" />
-            {saved ? "Copiado!" : "Copiar Texto"}
+            {saved ? "¡Copiado!" : "Copiar Texto"}
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            title="Descargar como archivo de texto plano"
+          >
+            <FileText className="h-4 w-4" />
+            .txt
           </button>
         </div>
 
