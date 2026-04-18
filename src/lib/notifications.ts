@@ -109,11 +109,12 @@ interface NotifyConsumerParams {
 }
 
 /**
- * Look up the consumer's email from the case's user_id via Clerk.
+ * Look up the consumer's email and userId from the case via Clerk.
  */
 async function findConsumerEmail(
   caseId: string
 ): Promise<{
+  userId: string;
   email: string;
   nombre: string;
   pais: "AR" | "MX";
@@ -143,6 +144,7 @@ async function findConsumerEmail(
       [user.firstName, user.lastName].filter(Boolean).join(" ") || "Usuario";
 
     return {
+      userId: record.user_id,
       email,
       nombre,
       pais: record.pais_detectado ?? "AR",
@@ -232,6 +234,76 @@ export function buildStatusChangeNotification(
   }
 }
 
+// ── Welcome email when a company first registers ──────────────────────────────
+
+interface NotifyEmpresaWelcomeParams {
+  readonly empresaNombre: string;
+  readonly emailContacto: string;
+  readonly pendingCount: number;
+}
+
+/**
+ * Send a welcome email to a newly registered company.
+ * If there are pending complaints they haven't seen yet, summarise them.
+ */
+export async function notifyEmpresaWelcome(
+  params: NotifyEmpresaWelcomeParams
+): Promise<void> {
+  try {
+    const resend = getResend();
+    if (!resend) return;
+
+    const { empresaNombre, emailContacto, pendingCount } = params;
+    const pendingLine =
+      pendingCount > 0
+        ? `<p style="margin:0 0 12px">Encontramos <strong>${pendingCount} reclamo${pendingCount !== 1 ? "s" : ""} pendiente${pendingCount !== 1 ? "s" : ""}</strong> de consumidores que ya te esperan en tu panel.</p>`
+        : `<p style="margin:0 0 12px">Por ahora no hay reclamos pendientes. Te avisaremos en cuanto llegue uno.</p>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Bienvenida a JustIA Consumidor</title></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center" style="padding:40px 20px">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0">
+        <tr><td style="background:linear-gradient(135deg,#1e40af,#7c3aed);padding:32px;border-radius:12px 12px 0 0;text-align:center">
+          <h1 style="margin:0;color:#fff;font-size:22px">⚖️ JustIA Consumidor</h1>
+          <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px">Portal de Empresas</p>
+        </td></tr>
+        <tr><td style="padding:32px">
+          <h2 style="margin:0 0 16px;color:#1e293b;font-size:20px">¡Bienvenida, ${empresaNombre}!</h2>
+          <p style="margin:0 0 12px;color:#475569">Tu cuenta fue creada exitosamente en el portal de empresas de JustIA Consumidor.</p>
+          ${pendingLine}
+          <div style="text-align:center;margin:28px 0">
+            <a href="${BASE_URL}/empresa" style="background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;display:inline-block">
+              Ver mi panel →
+            </a>
+          </div>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+          <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center">
+            Desde tu panel podés ver cada reclamo en detalle, responder directamente al consumidor y hacer seguimiento del estado de cada caso.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: [emailContacto],
+      subject: `Bienvenida a JustIA Consumidor${pendingCount > 0 ? ` — ${pendingCount} reclamo${pendingCount !== 1 ? "s" : ""} te esperan` : ""}`,
+      html,
+    });
+  } catch (err) {
+    console.error(
+      "[notifications] Error sending empresa welcome email:",
+      err instanceof Error ? err.message : err
+    );
+  }
+}
+
 export async function notifyConsumerResponse(
   params: NotifyConsumerParams
 ): Promise<void> {
@@ -264,6 +336,27 @@ export async function notifyConsumerResponse(
       to: [consumer.email],
       subject: SUBJECT_MAP[params.tipoRespuesta] ?? `Respuesta de ${params.empresaNombre}`,
       html,
+    });
+
+    // Also create an in-app notification
+    const IN_APP_TITLES: Record<string, string> = {
+      aceptar: `${params.empresaNombre} aceptó tu reclamo`,
+      propuesta: `${params.empresaNombre} te envió una propuesta`,
+      solicitar_info: `${params.empresaNombre} solicita más información`,
+      rechazar: `${params.empresaNombre} respondió tu reclamo`,
+    };
+    const IN_APP_MESSAGES: Record<string, string> = {
+      aceptar: `¡Buenas noticias! ${params.empresaNombre} aceptó tu reclamo. Revisá los detalles en tu caso.`,
+      propuesta: `${params.empresaNombre} te hizo una propuesta de resolución. Revisá y respondé desde tu caso.`,
+      solicitar_info: `${params.empresaNombre} necesita más información de tu parte para avanzar con tu reclamo.`,
+      rechazar: `${params.empresaNombre} respondió tu reclamo. Podés ver su respuesta y decidir cómo proceder.`,
+    };
+    await createInAppNotification({
+      userId: consumer.userId,
+      caseId: params.caseId,
+      tipo: "company_response",
+      titulo: IN_APP_TITLES[params.tipoRespuesta] ?? `Respuesta de ${params.empresaNombre}`,
+      mensaje: IN_APP_MESSAGES[params.tipoRespuesta] ?? `${params.empresaNombre} respondió tu reclamo.`,
     });
   } catch (err) {
     console.error(

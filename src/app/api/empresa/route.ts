@@ -11,6 +11,7 @@ import {
   findCasesByEmailDomain,
   linkUserToCompany,
 } from "@/lib/empresa";
+import { notifyEmpresaWelcome } from "@/lib/notifications";
 import { clerkClient } from "@clerk/nextjs/server";
 import { supabase } from "@/lib/supabase";
 
@@ -20,7 +21,8 @@ const registerSchema = z.object({
   cuit: z.string().optional(),
   sector: z.string().optional(),
   pais: z.enum(["AR", "MX"]),
-  email_contacto: z.string().email().optional(),
+  // optional in the body — defaults to the user's own email if omitted
+  email_contacto: z.string().email("Email de contacto inválido").optional(),
   telefono: z.string().optional(),
   domicilio: z.string().optional(),
 });
@@ -242,7 +244,27 @@ export async function POST(request: NextRequest) {
     const client = await clerkClient();
     const user = await client.users.getUser(userId);
     const email = user.emailAddresses[0]?.emailAddress ?? "";
-    const account = await registerCompany(userId, email, parsed.data);
+
+    // Default email_contacto to the registering user's email if not supplied
+    const data = {
+      ...parsed.data,
+      email_contacto: parsed.data.email_contacto ?? email,
+    };
+
+    const account = await registerCompany(userId, email, data);
+
+    // Fire-and-forget: welcome email with count of pending complaints
+    const contactEmail = data.email_contacto;
+    getCompanyComplaints(account)
+      .then((complaints) => {
+        notifyEmpresaWelcome({
+          empresaNombre: account.nombre,
+          emailContacto: contactEmail,
+          pendingCount: complaints.length,
+        });
+      })
+      .catch(() => {}); // swallow — non-critical
+
     return NextResponse.json({ registered: true, account });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al registrar.";
