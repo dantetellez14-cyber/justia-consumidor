@@ -8,9 +8,79 @@ import {
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError } from "@/lib/logger";
 import { cached } from "@/lib/cache";
+import { supabase } from "@/lib/supabase";
 
 const EMBEDDING_MODEL = "multilingual-e5-large";
 const TOP_K = 5;
+const SUPABASE_TOP_K = 5;
+
+// ── Supabase full-text helper ─────────────────────────────────────────────────
+
+/**
+ * Extract a short keyword from the query to use as an ILIKE pattern.
+ * Takes the longest word (>3 chars) that looks like a company/sector name.
+ */
+function extractKeyword(query: string): string {
+  const words = query
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3);
+  // Prefer the longest word as the most likely company/sector identifier
+  return words.sort((a, b) => b.length - a.length)[0] ?? query.slice(0, 30);
+}
+
+async function searchSupabase(
+  query: string,
+  pais?: string
+): Promise<JurisprudenciaCase[]> {
+  const keyword = extractKeyword(query);
+  const ilike = `%${keyword}%`;
+
+  let q = supabase
+    .from("jurisprudencia_cases")
+    .select(
+      "expediente_id, hechos, ratio_decidendi, probabilidad_exito, duracion_dias, pais"
+    )
+    .or(`hechos.ilike.${ilike},ratio_decidendi.ilike.${ilike}`)
+    .order("probabilidad_exito", { ascending: false })
+    .limit(SUPABASE_TOP_K);
+
+  if (pais) {
+    q = q.eq("pais", pais);
+  }
+
+  const { data, error } = await q;
+
+  if (error) {
+    logError("Supabase jurisprudencia search error", error, {
+      route: "/api/search-jurisprudencia",
+    });
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    expediente_id: String(row.expediente_id),
+    hechos: String(row.hechos ?? ""),
+    ratio_decidendi: String(row.ratio_decidendi ?? ""),
+    probabilidad_exito: Number(row.probabilidad_exito ?? 0),
+    duracion_dias: Number(row.duracion_dias ?? 0),
+    pais: (row.pais === "MX" ? "MX" : "AR") as "AR" | "MX",
+  }));
+}
+
+/** Merge Pinecone + Supabase results, deduplicate, sort by probabilidad_exito desc. */
+function mergeResults(
+  pinecone: JurisprudenciaCase[],
+  supabaseRows: JurisprudenciaCase[]
+): JurisprudenciaCase[] {
+  const seen = new Set<string>(pinecone.map((c) => c.expediente_id));
+  const unique = [
+    ...pinecone,
+    ...supabaseRows.filter((c) => !seen.has(c.expediente_id)),
+  ];
+  return unique.sort((a, b) => b.probabilidad_exito - a.probabilidad_exito);
+}
 
 export async function POST(request: Request) {
   // Rate limit: 15 searches per minute per IP
@@ -48,16 +118,34 @@ export async function POST(request: Request) {
 
   const { query, pais } = parsed.data;
 
+  // Cache key: normalize query to first 100 chars + country — 24h TTL
+  const normalizedQuery = query.toLowerCase().trim().slice(0, 100);
+  const cacheKey = `juris:${normalizedQuery}:${pais ?? "all"}`;
+
   if (!process.env.PINECONE_API_KEY) {
-    // Fallback: return empty so the app uses the static jurisprudencia list
-    return NextResponse.json({ cases: [], source: "static" });
+    // No Pinecone — query Supabase only
+    try {
+      const supabaseCases = await cached(cacheKey, 86400, () =>
+        searchSupabase(query, pais)
+      );
+      return NextResponse.json(
+        { cases: supabaseCases, source: "supabase" },
+        {
+          headers: {
+            "Cache-Control":
+              "public, s-maxage=86400, stale-while-revalidate=43200",
+          },
+        }
+      );
+    } catch (err) {
+      logError("Supabase-only search error", err, {
+        route: "/api/search-jurisprudencia",
+      });
+      return NextResponse.json({ cases: [], source: "error" });
+    }
   }
 
   try {
-    // Cache key: normalize query to first 100 chars + country — 24h TTL
-    const normalizedQuery = query.toLowerCase().trim().slice(0, 100);
-    const cacheKey = `juris:${normalizedQuery}:${pais ?? "all"}`;
-
     const result = await cached(cacheKey, 86400, async () => {
       const pc = getPinecone();
 
@@ -75,14 +163,19 @@ export async function POST(request: Request) {
       const index = pc.index(PINECONE_INDEX_NAME);
       const filter = pais ? { pais: { $eq: pais } } : undefined;
 
-      const results = await index.query({
-        vector: queryVector,
-        topK: TOP_K,
-        includeMetadata: true,
-        filter,
-      });
+      const [pineconeResults, supabaseCases] = await Promise.all([
+        index.query({
+          vector: queryVector,
+          topK: TOP_K,
+          includeMetadata: true,
+          filter,
+        }),
+        searchSupabase(query, pais),
+      ]);
 
-      const cases: JurisprudenciaCase[] = (results.matches ?? []).map((match) => {
+      const pineconeCases: JurisprudenciaCase[] = (
+        pineconeResults.matches ?? []
+      ).map((match) => {
         const meta = match.metadata as Record<string, unknown>;
         return {
           expediente_id: String(meta.expediente_id ?? ""),
@@ -94,10 +187,12 @@ export async function POST(request: Request) {
         };
       });
 
+      const merged = mergeResults(pineconeCases, supabaseCases);
+
       return {
-        cases,
-        source: "pinecone" as const,
-        scores: (results.matches ?? []).map((m) => m.score),
+        cases: merged,
+        source: "pinecone+supabase" as const,
+        scores: (pineconeResults.matches ?? []).map((m) => m.score),
       };
     });
 
@@ -107,7 +202,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
-    logError("Pinecone search error", err, { route: "/api/search-jurisprudencia" });
+    logError("Search error", err, { route: "/api/search-jurisprudencia" });
     return NextResponse.json({ cases: [], source: "error" });
   }
 }
