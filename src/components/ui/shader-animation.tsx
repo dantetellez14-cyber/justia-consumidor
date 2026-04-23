@@ -5,18 +5,13 @@ import * as THREE from "three"
 
 import { cn } from "@/lib/utils"
 
-interface ShaderUniforms {
-  time: { value: number }
-  resolution: { value: THREE.Vector2 }
-}
-
 export function ShaderAnimation({ className }: { className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<{
     camera: THREE.Camera
     scene: THREE.Scene
     renderer: THREE.WebGLRenderer
-    uniforms: ShaderUniforms
+    uniforms: any
     animationId: number
   } | null>(null)
 

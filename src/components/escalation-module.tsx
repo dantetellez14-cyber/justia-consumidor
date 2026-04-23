@@ -286,6 +286,28 @@ export function EscalationModule({
   const docLabel = isMX ? "CURP" : "DNI";
   const idLabel = isMX ? "RFC de la empresa" : "CUIT de la empresa";
 
+  // Build form data
+  const formData: EscalationFormData = {
+    nombreCompleto,
+    documento,
+    domicilio,
+    email,
+    telefono,
+    empresaNombre: analysis.empresa,
+    empresaDomicilio,
+    ...(isMX
+      ? { empresaRFC: empresaId }
+      : { empresaCUIT: empresaId }),
+    descripcionHechos: analysis.core_grievance,
+    montoReclamado: analysis.monto_reclamo,
+    fechaCompra: analysis.fecha_incidente,
+    productoServicio: analysis.producto_servicio,
+    resolucionSolicitada: resolucion,
+    reclamoDirectoRealizado: true,
+    fechaReclamoDirecto: fechaReclamoDirecto || undefined,
+    numeroReclamoDirecto: numeroReclamo || undefined,
+  };
+
   const canProceedForm =
     nombreCompleto.trim() && documento.trim() && email.trim();
 
@@ -296,39 +318,9 @@ export function EscalationModule({
     useState<EscalationFormData | null>(null);
 
   const advanceToDocument = useCallback(() => {
-    setFormDataSnapshot({
-      nombreCompleto,
-      documento,
-      domicilio,
-      email,
-      telefono,
-      empresaNombre: analysis.empresa,
-      empresaDomicilio,
-      ...(isMX ? { empresaRFC: empresaId } : { empresaCUIT: empresaId }),
-      descripcionHechos: analysis.core_grievance,
-      montoReclamado: analysis.monto_reclamo,
-      fechaCompra: analysis.fecha_incidente,
-      productoServicio: analysis.producto_servicio,
-      resolucionSolicitada: resolucion,
-      reclamoDirectoRealizado: true,
-      fechaReclamoDirecto: fechaReclamoDirecto || undefined,
-      numeroReclamoDirecto: numeroReclamo || undefined,
-    });
+    setFormDataSnapshot({ ...formData });
     setWizardStep("document");
-  }, [
-    nombreCompleto,
-    documento,
-    domicilio,
-    email,
-    telefono,
-    analysis,
-    empresaDomicilio,
-    isMX,
-    empresaId,
-    resolucion,
-    fechaReclamoDirecto,
-    numeroReclamo,
-  ]);
+  }, [formData]);
 
   const generatedDoc = useMemo(() => {
     if (!selectedChannel || !formDataSnapshot) return null;

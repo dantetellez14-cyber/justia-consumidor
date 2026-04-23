@@ -89,6 +89,7 @@ async function updateCase(caseId: string, updates: Record<string, unknown>): Pro
 
 export default function Home() {
   const [step, setStep] = useState<AppStep>("welcome");
+  const [relato, setRelato] = useState("");
   const [analysis, setAnalysis] = useState<CaseAnalysis | null>(null);
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [relevantCases, setRelevantCases] = useState<
@@ -111,6 +112,7 @@ export default function Home() {
     async (composedRelato: string, submittedForm: ComplaintFormData) => {
       if (!composedRelato.trim()) return;
 
+      setRelato(composedRelato);
       setLoading(true);
       setError(null);
       setAnalysis(null);
@@ -194,6 +196,7 @@ export default function Home() {
 
   const handleRestart = () => {
     setStep("welcome");
+    setRelato("");
     setAnalysis(null);
     setMetrics(null);
     setRelevantCases([]);

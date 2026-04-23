@@ -15,7 +15,6 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://justia-consumidor.vercel.app"),
   title: {
     default: "JustIA Consumidor — Resolución Inteligente de Disputas",
     template: "%s | JustIA Consumidor",

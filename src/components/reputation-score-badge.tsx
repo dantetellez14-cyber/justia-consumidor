@@ -5,6 +5,7 @@ import { Shield, TrendingUp, BarChart3, Target, Award } from "lucide-react";
 import type { ReputationScore, ScoreLevel } from "@/lib/reputation-score";
 import {
   getScoreBgColor,
+  getScoreRingColor,
   getLevelLabel,
 } from "@/lib/reputation-score";
 
@@ -138,6 +139,7 @@ function DimensionBar({
 
 export function ReputationScoreBadge({ score, empresa }: Props) {
   const bgColor = getScoreBgColor(score.level);
+  const ringColor = getScoreRingColor(score.level);
   const levelLabel = getLevelLabel(score.level);
 
   return (
