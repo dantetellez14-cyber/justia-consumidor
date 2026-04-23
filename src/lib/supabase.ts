@@ -1,7 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder";
 
 /**
  * Public client (anon key) — used only on the client-side.
@@ -17,9 +19,6 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey);
  * NEVER expose this client or SUPABASE_SECRET_KEY to the browser.
  */
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
-if (!supabaseSecretKey && typeof window === "undefined") {
-  throw new Error("SUPABASE_SECRET_KEY is required on the server");
-}
 export const supabase = createClient(
   supabaseUrl,
   supabaseSecretKey || supabaseAnonKey

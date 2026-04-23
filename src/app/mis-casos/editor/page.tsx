@@ -333,7 +333,7 @@ function EditorContent() {
           {/* Footer note */}
           <p className="text-center text-xs text-slate-500 mt-6 mb-20 no-print">
             El documento se guarda automáticamente en tu navegador cada 3 segundos.
-            Para guardar permanentemente, usa "Guardar borrador".
+            Para guardar permanentemente, usa &quot;Guardar borrador&quot;.
             El PDF se genera con la impresora de tu sistema operativo.
           </p>
         </div>

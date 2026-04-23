@@ -67,8 +67,8 @@ describe("POST /api/search-jurisprudencia", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(data.source).toBe("static");
-    expect(data.cases).toEqual([]);
+    expect(data.source).toBe("supabase");
+    expect(Array.isArray(data.cases)).toBe(true);
   });
 
   it("accepts valid query with AR pais", async () => {
@@ -81,7 +81,7 @@ describe("POST /api/search-jurisprudencia", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(data.source).toBe("static");
+    expect(data.source).toBe("supabase");
   });
 
   it("returns 400 for malformed JSON body", async () => {

@@ -192,14 +192,17 @@ export function getChannelById(
  */
 export function getRecommendedChannel(
   pais: "AR" | "MX",
-  _analysis: CaseAnalysis
+  analysis: CaseAnalysis
 ): EscalationChannel {
   if (pais === "AR") {
     // COPREC is mandatory before judicial action in Argentina
     return "coprec";
   }
-  // In Mexico, Concilianet is preferred (faster, online)
-  return "profeco_concilianet";
+  // In Mexico, prefer Concilianet for high-probability straightforward cases,
+  // otherwise route to broader PROFECO queue.
+  return analysis.probabilidad_exito >= 0.6
+    ? "profeco_concilianet"
+    : "profeco_queja";
 }
 
 /**

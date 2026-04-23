@@ -234,7 +234,9 @@ export function ComplaintForm({ onSubmit, loading, error }: Props) {
   }, []);
 
   const handleSelectCase = useCallback((c: IndustryCase) => {
-    const { label: _l, issueTag: _t, ...formData } = c;
+    const { label, issueTag, ...formData } = c;
+    void label;
+    void issueTag;
     setForm(formData);
     setShowExampleModal(false);
     setSelectedIndustry(null);
