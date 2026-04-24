@@ -82,21 +82,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     // Filter to relevant sectors
-    const filtered = allCases.filter((c) => {
-      const sectorInHechos = RELEVANT_SECTORS;
-      return [...sectorInHechos].some((s) =>
-        c.hechos.toUpperCase().includes(s)
-      );
-    });
+    const filtered = allCases.filter((c) =>
+      [...RELEVANT_SECTORS].some((s) => c.hechos.toUpperCase().includes(s))
+    );
+
+    // Deduplicate by expediente_id — CSV can contain repeated rows within the same pull
+    const deduped = [...new Map(filtered.map((c) => [c.expediente_id, c])).values()];
 
     log.info(
-      { total: allCases.length, afterFilter: filtered.length },
+      { total: allCases.length, afterFilter: filtered.length, afterDedup: deduped.length },
       "Records fetched from PROFECO"
     );
 
     // Upsert in batches
-    for (let i = 0; i < filtered.length; i += BATCH_SIZE) {
-      const batch = filtered.slice(i, i + BATCH_SIZE).map((c) => ({
+    for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
+      const batch = deduped.slice(i, i + BATCH_SIZE).map((c) => ({
         expediente_id: c.expediente_id,
         hechos: c.hechos,
         ratio_decidendi: c.ratio_decidendi,
