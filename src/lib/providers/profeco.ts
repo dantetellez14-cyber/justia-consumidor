@@ -120,7 +120,7 @@ export async function streamProfecoData(
   const cases: JurisprudenciaCase[] = [];
 
   // Column index map — filled once the header row is parsed
-  let headerMap: Record<string, number> = {};
+  const headerMap: Record<string, number> = {};
   let headerParsed = false;
   let buffer = "";
 

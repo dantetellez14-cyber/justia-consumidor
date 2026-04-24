@@ -25,7 +25,10 @@ interface BeforeInstallPromptEvent extends Event {
 export function PwaRegister() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showBanner, setShowBanner] = useState(false);
-  const [installed, setInstalled] = useState(false);
+  // Lazily initialise so we never call setState synchronously inside an effect
+  const [installed, setInstalled] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches
+  );
 
   useEffect(() => {
     // Register service worker
@@ -37,9 +40,8 @@ export function PwaRegister() {
         });
     }
 
-    // Detect if already installed as PWA
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setInstalled(true);
+    // Already running as installed PWA — nothing else to set up
+    if (installed) {
       return;
     }
 

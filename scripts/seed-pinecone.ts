@@ -44,7 +44,8 @@ async function getExistingIds(pc: Pinecone): Promise<Set<string>> {
     const ids = new Set<string>();
     let paginationToken: string | undefined;
     do {
-      const result = await (index as any).listPaginated({
+      // listPaginated is not yet in Pinecone's public TS types but exists at runtime
+      const result = await (index as unknown as { listPaginated: (opts: { paginationToken?: string; limit: number }) => Promise<{ vectors?: { id: string }[]; pagination?: { next?: string } }> }).listPaginated({
         paginationToken,
         limit: 100,
       });

@@ -14,6 +14,19 @@
 
 import type { Octokit } from "@octokit/core";
 
+/** Octokit request options extended with mutable headers for ETag injection. */
+interface MutableRequestOptions {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  [key: string]: unknown;
+}
+
+interface OctokitError {
+  status: number;
+  response: Record<string, unknown>;
+}
+
 /**
  * Octokit plugin that caches responses using GitHub's ETag mechanism.
  * 304 Not Modified responses don't count against your rate limit.
@@ -24,10 +37,11 @@ export function cachePlugin(octokit: Octokit) {
   octokit.hook.wrap("request", async (request, options) => {
     const key = `${options.method} ${options.url}`;
     const cached = cache.get(key);
+    const mutable = options as unknown as MutableRequestOptions;
 
     if (cached) {
-      (options as any).headers = {
-        ...(options as any).headers,
+      mutable.headers = {
+        ...mutable.headers,
         "if-none-match": cached.etag,
       };
     }
@@ -39,11 +53,12 @@ export function cachePlugin(octokit: Octokit) {
         cache.set(key, { etag, data: response.data });
       }
       return response;
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as OctokitError;
       if (error.status === 304 && cached) {
         return { ...error.response, data: cached.data, status: 200 };
       }
-      throw error;
+      throw err;
     }
   });
 }

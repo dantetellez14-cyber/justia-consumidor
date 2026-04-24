@@ -59,7 +59,7 @@ describe("POST /api/search-jurisprudencia", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns static fallback when PINECONE_API_KEY missing", async () => {
+  it("returns supabase fallback when PINECONE_API_KEY missing", async () => {
     vi.stubEnv("PINECONE_API_KEY", "");
 
     const { POST } = await import("@/app/api/search-jurisprudencia/route");
@@ -67,8 +67,9 @@ describe("POST /api/search-jurisprudencia", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(data.source).toBe("static");
-    expect(data.cases).toEqual([]);
+    // When Pinecone is not configured the route falls back to Supabase search
+    expect(data.source).toBe("supabase");
+    expect(Array.isArray(data.cases)).toBe(true);
   });
 
   it("accepts valid query with AR pais", async () => {
@@ -81,7 +82,8 @@ describe("POST /api/search-jurisprudencia", () => {
     const data = await res.json();
 
     expect(res.status).toBe(200);
-    expect(data.source).toBe("static");
+    // Supabase fallback is used when Pinecone key is absent
+    expect(data.source).toBe("supabase");
   });
 
   it("returns 400 for malformed JSON body", async () => {

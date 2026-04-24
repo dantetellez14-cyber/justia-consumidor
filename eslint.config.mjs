@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Python venv contains minified JS from playwright/patchright packages
+    "scripts/python/venv/**",
+    // Git worktrees used by internal agents — not part of the main codebase
+    ".claude/worktrees/**",
+    // Coverage reports contain instrumented/generated JS
+    "coverage/**",
   ]),
 ]);
 
