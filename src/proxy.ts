@@ -10,6 +10,9 @@ const isPublicRoute = createRouteMatcher([
   "/privacidad",
   "/terminos",
   "/empresa",
+  // Cron/admin routes authenticate via CRON_SECRET header, not Clerk
+  "/api/admin/(.*)",
+  "/api/cron/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
