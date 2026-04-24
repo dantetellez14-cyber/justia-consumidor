@@ -63,7 +63,8 @@
     "supabase": "^2.91.3",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "xlsx": "^0.18.5"
   },
   "msw": {
     "workerDirectory": [

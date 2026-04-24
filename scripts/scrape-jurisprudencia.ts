@@ -20,6 +20,7 @@ import { scrapeAR_SAIJ } from "./lib/scrapers/ar-saij";
 import { scrapeAR_BoletinOficial } from "./lib/scrapers/ar-boletin";
 import { scrapeAR_CSJN } from "./lib/scrapers/ar-csjn";
 import { scrapeAR_DESCAjus } from "./lib/scrapers/ar-descajus";
+import { scrapeAR_Sanciones } from "./lib/scrapers/ar-sanciones";
 import { scrapeMX_SJF2 } from "./lib/scrapers/mx-sjf2";
 import { scrapeMX_SCJN } from "./lib/scrapers/mx-scjn";
 
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
     { name: "AR-BoletinOficial", fn: () => scrapeAR_BoletinOficial(4) },
     { name: "AR-CSJN",           fn: () => scrapeAR_CSJN() },
     { name: "AR-DESCAjus",       fn: () => scrapeAR_DESCAjus() },
+    { name: "AR-Sanciones",      fn: () => scrapeAR_Sanciones() },
     { name: "MX-SJF2",           fn: () => scrapeMX_SJF2(4) },
     { name: "MX-SCJN",           fn: () => scrapeMX_SCJN(3) },
   ];
