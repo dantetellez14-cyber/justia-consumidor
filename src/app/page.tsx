@@ -152,7 +152,8 @@ export default function Home() {
         setMetrics(calculateFinancialMetrics(enrichedAnalysis));
 
         // Try Pinecone semantic search, fallback to static list
-        const searchQuery = `${enrichedAnalysis.core_grievance} ${enrichedAnalysis.producto_servicio} ${enrichedAnalysis.analisis_legal}`;
+        // Note: analisis_legal excluded — legal citations add noise to semantic embeddings
+        const searchQuery = `${enrichedAnalysis.empresa} ${enrichedAnalysis.producto_servicio} ${enrichedAnalysis.core_grievance}`;
         try {
           const searchRes = await fetch("/api/search-jurisprudencia", {
             method: "POST",

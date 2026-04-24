@@ -11,38 +11,55 @@ import { cached } from "@/lib/cache";
 import { supabase } from "@/lib/supabase";
 
 const EMBEDDING_MODEL = "multilingual-e5-large";
-const TOP_K = 5;
-const SUPABASE_TOP_K = 5;
+const TOP_K = 12;          // Fetch more candidates for re-ranking
+const SUPABASE_TOP_K = 8;
+const SCORE_THRESHOLD = 0.45; // Min cosine similarity — drop irrelevant matches
 
 // ── Supabase full-text helper ─────────────────────────────────────────────────
 
 /**
- * Extract a short keyword from the query to use as an ILIKE pattern.
- * Takes the longest word (>3 chars) that looks like a company/sector name.
+ * Extract up to 3 meaningful keywords from the query for ILIKE matching.
+ * Skips common Spanish stopwords and prefers longer, domain-relevant tokens.
  */
-function extractKeyword(query: string): string {
+const STOPWORDS = new Set([
+  "para","como","cuando","donde","porque","pero","desde","hasta","sobre",
+  "entre","contra","ante","bajo","este","esta","estos","estas","tiene",
+  "tuve","habia","quiero","necesito","problema","problemas","queja","caso",
+  "tipo","manera","forma","todo","toda","todos","todas","algo","nada","bien",
+  "malo","mala","buenos","buenas","dias","meses","años","hace","hice","hizo",
+]);
+
+function extractKeywords(query: string): string[] {
   const words = query
     .toLowerCase()
-    .replace(/[^\w\s]/g, " ")
+    .replace(/[^\w\sáéíóúüñ]/g, " ")
     .split(/\s+/)
-    .filter((w) => w.length > 3);
-  // Prefer the longest word as the most likely company/sector identifier
-  return words.sort((a, b) => b.length - a.length)[0] ?? query.slice(0, 30);
+    .filter((w) => w.length > 3 && !STOPWORDS.has(w));
+  // Sort by length descending — longer words are more specific
+  const ranked = words.sort((a, b) => b.length - a.length);
+  // Return up to 3 unique keywords
+  return [...new Set(ranked)].slice(0, 3);
 }
 
 async function searchSupabase(
   query: string,
   pais?: string
 ): Promise<JurisprudenciaCase[]> {
-  const keyword = extractKeyword(query);
-  const ilike = `%${keyword}%`;
+  const keywords = extractKeywords(query);
+  if (keywords.length === 0) return [];
+
+  // Build OR filter across all keywords × both text fields
+  const orClauses = keywords
+    .map((kw) => `hechos.ilike.%${kw}%,ratio_decidendi.ilike.%${kw}%`)
+    .join(",");
 
   let q = supabase
     .from("jurisprudencia_cases")
     .select(
       "expediente_id, hechos, ratio_decidendi, probabilidad_exito, duracion_dias, pais"
     )
-    .or(`hechos.ilike.${ilike},ratio_decidendi.ilike.${ilike}`)
+    .or(orClauses)
+    .gt("probabilidad_exito", 0)
     .order("probabilidad_exito", { ascending: false })
     .limit(SUPABASE_TOP_K);
 
@@ -69,17 +86,41 @@ async function searchSupabase(
   }));
 }
 
-/** Merge Pinecone + Supabase results, deduplicate, sort by probabilidad_exito desc. */
+/**
+ * Merge Pinecone + Supabase results with hybrid scoring.
+ * Score = 0.7 * semanticScore + 0.3 * probabilidad_exito
+ * Pinecone results are deduplicated first (they carry the semantic score).
+ * Supabase-only results get semanticScore = 0.
+ */
 function mergeResults(
   pinecone: JurisprudenciaCase[],
+  pineconeScores: number[],
   supabaseRows: JurisprudenciaCase[]
 ): JurisprudenciaCase[] {
-  const seen = new Set<string>(pinecone.map((c) => c.expediente_id));
-  const unique = [
-    ...pinecone,
+  // Filter out low-similarity Pinecone results
+  const pineconeFiltered = pinecone.filter(
+    (_, i) => (pineconeScores[i] ?? 0) >= SCORE_THRESHOLD
+  );
+  const filteredScores = pineconeScores.filter((s) => s >= SCORE_THRESHOLD);
+
+  // Build score map for Pinecone candidates
+  const scoreMap = new Map<string, number>();
+  pineconeFiltered.forEach((c, i) => scoreMap.set(c.expediente_id, filteredScores[i]));
+
+  const seen = new Set<string>(pineconeFiltered.map((c) => c.expediente_id));
+  const combined = [
+    ...pineconeFiltered,
     ...supabaseRows.filter((c) => !seen.has(c.expediente_id)),
   ];
-  return unique.sort((a, b) => b.probabilidad_exito - a.probabilidad_exito);
+
+  // Hybrid score: semantic similarity weighted higher than domain prior
+  return combined.sort((a, b) => {
+    const semA = scoreMap.get(a.expediente_id) ?? 0;
+    const semB = scoreMap.get(b.expediente_id) ?? 0;
+    const scoreA = 0.7 * semA + 0.3 * a.probabilidad_exito;
+    const scoreB = 0.7 * semB + 0.3 * b.probabilidad_exito;
+    return scoreB - scoreA;
+  });
 }
 
 export async function POST(request: Request) {
@@ -173,9 +214,10 @@ export async function POST(request: Request) {
         searchSupabase(query, pais),
       ]);
 
-      const pineconeCases: JurisprudenciaCase[] = (
-        pineconeResults.matches ?? []
-      ).map((match) => {
+      const matches = pineconeResults.matches ?? [];
+      const rawScores = matches.map((m) => m.score ?? 0);
+
+      const pineconeCases: JurisprudenciaCase[] = matches.map((match) => {
         const meta = match.metadata as Record<string, unknown>;
         return {
           expediente_id: String(meta.expediente_id ?? ""),
@@ -187,12 +229,12 @@ export async function POST(request: Request) {
         };
       });
 
-      const merged = mergeResults(pineconeCases, supabaseCases);
+      const merged = mergeResults(pineconeCases, rawScores, supabaseCases);
 
       return {
         cases: merged,
         source: "pinecone+supabase" as const,
-        scores: (pineconeResults.matches ?? []).map((m) => m.score),
+        scores: rawScores,
       };
     });
 
