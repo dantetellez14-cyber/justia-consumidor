@@ -4,7 +4,6 @@ import { Scale, Shield, Clock, FileText, Users, ChevronRight, Building2 } from "
 import { motion } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import { ShaderAnimation } from "@/components/ui/shader-animation";
 import { Spotlight } from "@/components/ui/spotlight";
 
 interface Props {
@@ -92,8 +91,10 @@ export function WelcomeHero({ onStart }: Props) {
             className="w-full rounded-[2.5rem] relative overflow-hidden border border-white/10 flex flex-col items-center justify-center mt-4"
             style={{ background: "rgba(2,2,10,0.96)", minHeight: "600px" }}
           >
-            {/* Shader background */}
-            <ShaderAnimation className="absolute inset-0 z-0 opacity-60" />
+            {/* Animated gradient background (replaces Three.js shader) */}
+            <div className="absolute inset-0 z-0" style={{
+              background: "radial-gradient(ellipse at 20% 50%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(139,92,246,0.15) 0%, transparent 50%)",
+            }} />
 
             {/* Spotlight */}
             <Spotlight className="-top-40 left-0 md:left-60 md:-top-20" fill="white" />
