@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CaseAnalysis } from "@/lib/types";
-import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2, Sparkles, Copy, Share2 } from "lucide-react";
+import { FileText, Download, Mail, Save, Pencil, Send, CheckCircle2, AlertCircle, Building2, Loader2, Sparkles, Copy, Share2, Lock, Zap, Shield, Clock } from "lucide-react";
 import { motion } from "framer-motion";
+import { useAuth } from "@clerk/nextjs";
 
 interface Props {
   readonly analysis: CaseAnalysis;
@@ -73,10 +74,113 @@ Teléfono: [Completar]`;
 const TEST_NOMBRE = "Dante Tellez";
 const TEST_EMAIL = "dantetellezao@gmail.com";
 
+// ── Paywall overlay ───────────────────────────────────────────────────────────
+function ProPaywall({ empresa }: { empresa: string }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="relative rounded-xl border border-purple-200 bg-white shadow-xl overflow-hidden"
+    >
+      {/* Blurred preview of the complaint */}
+      <div className="relative px-6 pt-6 pb-0 select-none pointer-events-none">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-600 line-clamp-4">
+{`NOTA DE RECLAMO FORMAL
+
+Fecha: ${new Date().toLocaleDateString("es-AR", { year: "numeric", month: "long", day: "numeric" })}
+De: [Tu nombre completo]
+Para: ${empresa}
+
+ASUNTO: Reclamo formal por incumplimiento...`}
+          </pre>
+        </div>
+        {/* Gradient blur overlay */}
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent" />
+      </div>
+
+      {/* Paywall card */}
+      <div className="px-6 pb-6 pt-4 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
+          <Lock className="h-7 w-7 text-white" />
+        </div>
+
+        <h3 className="text-xl font-black text-slate-800">
+          Tu reclamo está listo
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Desbloquea el documento completo con JustIA Pro
+        </p>
+
+        {/* Price */}
+        <div className="my-5 inline-flex items-end gap-1">
+          <span className="text-4xl font-black text-slate-900">$10</span>
+          <span className="mb-1 text-base text-slate-500">USD / año</span>
+        </div>
+
+        {/* Features */}
+        <ul className="mb-6 space-y-2 text-left mx-auto max-w-xs">
+          {[
+            { icon: FileText, text: "Carta de reclamo formal completa (PDF)" },
+            { icon: Send,     text: "Envío directo a la empresa por email" },
+            { icon: Shield,   text: "Acceso al módulo de arbitraje IA" },
+            { icon: Clock,    text: "Seguimiento del caso en tiempo real" },
+            { icon: Zap,      text: "Todos los casos durante 1 año" },
+          ].map(({ icon: Icon, text }) => (
+            <li key={text} className="flex items-center gap-2 text-sm text-slate-600">
+              <Icon className="h-4 w-4 shrink-0 text-purple-500" />
+              {text}
+            </li>
+          ))}
+        </ul>
+
+        <button
+          onClick={handleUpgrade}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-base font-bold text-white shadow-lg transition-all hover:scale-[1.02] disabled:opacity-70"
+          style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)" }}
+        >
+          {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
+          {loading ? "Redirigiendo..." : "Desbloquear por $10/año"}
+        </button>
+
+        <p className="mt-3 text-xs text-slate-400">
+          Pago seguro vía Stripe · Cancela cuando quieras
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
+  const { isSignedIn } = useAuth();
+  const [isPro, setIsPro] = useState<boolean | null>(null); // null = loading
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
+
+  useEffect(() => {
+    if (!isSignedIn) { setIsPro(false); return; }
+    fetch("/api/stripe/status")
+      .then((r) => r.json())
+      .then((d) => setIsPro(d.isPro === true))
+      .catch(() => setIsPro(false));
+  }, [isSignedIn]);
   const [saved, setSaved] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingCopy, setSendingCopy] = useState(false);
@@ -296,6 +400,30 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
       setSendingCopy(false);
     }
   };
+
+  // Loading state
+  if (isPro === null) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  // Paywall — not Pro
+  if (!isPro) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <ProPaywall empresa={analysis.empresa} />
+        <button
+          onClick={onNext}
+          className="w-full rounded-lg border border-slate-200 bg-white py-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50"
+        >
+          Continuar sin descargar &rarr;
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

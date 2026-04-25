@@ -13,6 +13,10 @@ const isPublicRoute = createRouteMatcher([
   // Cron/admin routes authenticate via CRON_SECRET header, not Clerk
   "/api/admin/(.*)",
   "/api/cron/(.*)",
+  // Stripe webhook uses its own signature verification
+  "/api/stripe/webhook",
+  // Search and public data
+  "/api/search-jurisprudencia",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
