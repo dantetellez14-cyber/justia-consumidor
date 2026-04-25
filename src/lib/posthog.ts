@@ -17,8 +17,9 @@ export function setStoredConsent(consent: "accepted" | "rejected"): void {
 }
 
 /**
- * Initialize PostHog only if the user has accepted cookies.
- * Called on consent acceptance or on page load if consent was previously given.
+ * Initialize PostHog immediately (opt-out model).
+ * Starts capturing anonymized analytics by default.
+ * If the user previously rejected cookies, opts out right away.
  */
 export function initPostHog() {
   if (
@@ -28,9 +29,6 @@ export function initPostHog() {
     return;
   }
 
-  const consent = getStoredConsent();
-  if (consent !== "accepted") return;
-
   if (posthog.__loaded) return; // already initialized
 
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
@@ -38,7 +36,14 @@ export function initPostHog() {
     person_profiles: "identified_only",
     capture_pageview: true,
     capture_pageleave: true,
+    opt_out_capturing_by_default: false,
   });
+
+  // If user previously rejected cookies, honor that immediately
+  const consent = getStoredConsent();
+  if (consent === "rejected") {
+    posthog.opt_out_capturing();
+  }
 }
 
 /**

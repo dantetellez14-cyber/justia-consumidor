@@ -12,27 +12,28 @@ export function PostHogProvider({ children }: { readonly children: React.ReactNo
     return getStoredConsent() === "accepted";
   });
 
-  // Initialize PostHog only after consent
+  // Initialize PostHog immediately on mount (opt-out model)
   useEffect(() => {
-    if (consentGiven) {
-      initPostHog();
-    }
-  }, [consentGiven]);
+    initPostHog();
+  }, []);
 
-  // Identify user when signed in and consent given
+  // Identify user when signed in
   useEffect(() => {
-    if (!consentGiven) return;
     if (userId) {
       posthog.identify(userId);
     } else {
       posthog.reset();
     }
-  }, [userId, consentGiven]);
+  }, [userId]);
 
   const handleConsent = (accepted: boolean) => {
-    if (accepted) {
-      setConsentGiven(true);
-      initPostHog();
+    setConsentGiven(accepted);
+    if (!accepted) {
+      // User rejected — opt out and clear data
+      posthog.opt_out_capturing();
+      posthog.reset();
+    } else {
+      posthog.opt_in_capturing();
     }
   };
 
