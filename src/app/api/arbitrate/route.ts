@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
+import { trackTokenUsage } from "@/lib/track-tokens";
 import { z } from "zod";
 
 const log = createRouteLogger("/api/arbitrate");
@@ -127,8 +128,23 @@ Reglas:
       },
     });
 
+    const t0 = Date.now();
     const result = await model.generateContent(prompt);
+    const latencyMs = Date.now() - t0;
     const text = result.response.text();
+
+    // Track real token usage from Gemini metadata (fire-and-forget)
+    const usage = result.response.usageMetadata;
+    void trackTokenUsage({
+      userId,
+      route: "/api/arbitrate",
+      model: "gemini-1.5-flash",
+      provider: "gemini",
+      inputTokens: usage?.promptTokenCount ?? 0,
+      outputTokens: usage?.candidatesTokenCount ?? 0,
+      latencyMs,
+      success: true,
+    });
 
     // Parse JSON from response
     let verdict: Record<string, unknown>;
@@ -141,7 +157,7 @@ Reglas:
     }
 
     log.info(
-      { empresa: analysis.empresa, resultado: verdict.resultado },
+      { empresa: analysis.empresa, resultado: verdict.resultado, latencyMs },
       "Arbitration verdict generated"
     );
 

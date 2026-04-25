@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
+import { trackTokenUsage, estimateTokens } from "@/lib/track-tokens";
 
 const log = createRouteLogger("/api/analyze");
 
@@ -73,6 +75,7 @@ function extractJSON(text: string): Record<string, unknown> {
 }
 
 export async function POST(request: NextRequest) {
+  const { userId } = await auth().catch(() => ({ userId: null as string | null }));
   // Rate limit: 10 analyses per minute per IP
   const ip = getClientIp(request);
   const { allowed, resetIn } = await rateLimit(`analyze:${ip}`, {
@@ -135,6 +138,18 @@ export async function POST(request: NextRequest) {
 
     const result = await response.json();
     const rawText: string = result.message?.content ?? "";
+
+    // Track estimated tokens (Ollama doesn't return usage metadata)
+    void trackTokenUsage({
+      userId: userId ?? null,
+      route: "/api/analyze",
+      model: OLLAMA_MODEL,
+      provider: "ollama",
+      inputTokens: estimateTokens(SYSTEM_PROMPT + relato),
+      outputTokens: estimateTokens(rawText),
+      success: true,
+    });
+
     const analysis = extractJSON(rawText);
 
     // Validate required fields

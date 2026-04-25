@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Scale, Info, ArrowLeft } from "lucide-react";
 import { UserButton, useAuth } from "@clerk/nextjs";
@@ -25,6 +25,7 @@ import { CaseTracker } from "@/components/case-tracker";
 import { ComplaintStatsPanel } from "@/components/complaint-stats-panel";
 import { FeedbackRating } from "@/components/feedback-rating";
 import { NotificationBell } from "@/components/notification-bell";
+import { useSessionTracker } from "@/hooks/use-session-tracker";
 
 type AppStep =
   | "welcome"
@@ -103,6 +104,13 @@ export default function Home() {
   );
   const [caseId, setCaseId] = useState<string | null>(null);
   const { isSignedIn } = useAuth();
+  const { trackPage } = useSessionTracker();
+
+  // Track each step transition as a page visit
+  useEffect(() => {
+    if (step !== "welcome") trackPage();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const markCompleted = (s: AppStep) => {
     setCompletedSteps((prev) => new Set([...prev, s]));
