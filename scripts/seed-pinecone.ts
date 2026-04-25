@@ -72,45 +72,56 @@ async function upsertCases(
   if (cases.length === 0) return;
 
   const index = pc.index(PINECONE_INDEX_NAME);
-  const texts = cases.map((c) => `${c.hechos} ${c.ratio_decidendi}`);
 
-  console.log(`[seed] Generating embeddings for ${cases.length} cases...`);
-  const embedResponse = await pc.inference.embed({
-    model: EMBEDDING_MODEL,
-    inputs: texts,
-    parameters: { inputType: "passage" },
-  });
+  // multilingual-e5-large accepts max 96 inputs per embed call
+  const EMBED_BATCH = 96;
+  const UPSERT_BATCH = 100;
+  const totalBatches = Math.ceil(cases.length / EMBED_BATCH);
 
-  const vectors = cases.map((c, i) => {
-    const embedding = embedResponse.data[i];
-    if (embedding.vectorType !== "dense") {
-      throw new Error(`Unexpected vector type: ${embedding.vectorType}`);
+  console.log(`[seed] Embedding + upserting ${cases.length} cases in batches of ${EMBED_BATCH}...`);
+
+  for (let i = 0; i < cases.length; i += EMBED_BATCH) {
+    const chunk = cases.slice(i, i + EMBED_BATCH);
+    const texts = chunk.map((c) => `${c.hechos} ${c.ratio_decidendi}`);
+    const batchNum = Math.floor(i / EMBED_BATCH) + 1;
+
+    const embedResponse = await pc.inference.embed({
+      model: EMBEDDING_MODEL,
+      inputs: texts,
+      parameters: { inputType: "passage" },
+    });
+
+    const vectors = chunk.map((c, j) => {
+      const embedding = embedResponse.data[j];
+      if (embedding.vectorType !== "dense") {
+        throw new Error(`Unexpected vector type: ${embedding.vectorType}`);
+      }
+      return {
+        id: buildVectorId(c.expediente_id),
+        values: embedding.values,
+        metadata: {
+          expediente_id: c.expediente_id,
+          hechos: c.hechos,
+          ratio_decidendi: c.ratio_decidendi,
+          probabilidad_exito: c.probabilidad_exito,
+          duracion_dias: c.duracion_dias,
+          pais: c.pais,
+          categoria: c.categoria,
+          tribunal: c.tribunal,
+          fecha_resolucion: c.fecha_resolucion,
+          url_fuente: c.url_fuente,
+        },
+      };
+    });
+
+    // Upsert this chunk's vectors
+    for (let j = 0; j < vectors.length; j += UPSERT_BATCH) {
+      await index.upsert({ records: vectors.slice(j, j + UPSERT_BATCH) });
     }
-    return {
-      id: buildVectorId(c.expediente_id),
-      values: embedding.values,
-      metadata: {
-        expediente_id: c.expediente_id,
-        hechos: c.hechos,
-        ratio_decidendi: c.ratio_decidendi,
-        probabilidad_exito: c.probabilidad_exito,
-        duracion_dias: c.duracion_dias,
-        pais: c.pais,
-        categoria: c.categoria,
-        tribunal: c.tribunal,
-        fecha_resolucion: c.fecha_resolucion,
-        url_fuente: c.url_fuente,
-      },
-    };
-  });
 
-  const BATCH = 100;
-  for (let i = 0; i < vectors.length; i += BATCH) {
-    await index.upsert({ records: vectors.slice(i, i + BATCH) });
-    console.log(
-      `[seed] Upserted batch ${Math.floor(i / BATCH) + 1}/${Math.ceil(vectors.length / BATCH)}`
-    );
+    process.stdout.write(`[seed] Batch ${batchNum}/${totalBatches} done (${Math.min(i + EMBED_BATCH, cases.length)}/${cases.length})\r`);
   }
+  console.log(`\n[seed] All ${cases.length} vectors upserted.`);
 }
 
 async function main(): Promise<void> {

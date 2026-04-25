@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Scale, Info, ArrowLeft } from "lucide-react";
 import { UserButton, useAuth } from "@clerk/nextjs";
@@ -25,7 +25,7 @@ import { CaseTracker } from "@/components/case-tracker";
 import { ComplaintStatsPanel } from "@/components/complaint-stats-panel";
 import { FeedbackRating } from "@/components/feedback-rating";
 import { NotificationBell } from "@/components/notification-bell";
-import { useSessionTracker } from "@/hooks/use-session-tracker";
+import { posthog } from "@/lib/posthog";
 
 type AppStep =
   | "welcome"
@@ -104,13 +104,6 @@ export default function Home() {
   );
   const [caseId, setCaseId] = useState<string | null>(null);
   const { isSignedIn } = useAuth();
-  const { trackPage } = useSessionTracker();
-
-  // Track each step transition as a page visit
-  useEffect(() => {
-    if (step !== "welcome") trackPage();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
 
   const markCompleted = (s: AppStep) => {
     setCompletedSteps((prev) => new Set([...prev, s]));
@@ -186,6 +179,16 @@ export default function Home() {
         }
 
         markCompleted("analyze");
+
+        // PostHog: case analyzed
+        posthog.capture("case_analyzed", {
+          empresa: enrichedAnalysis.empresa,
+          pais: enrichedAnalysis.pais_detectado,
+          categoria: enrichedAnalysis.producto_servicio,
+          probabilidad_exito: enrichedAnalysis.probabilidad_exito,
+          monto_reclamo: enrichedAnalysis.monto_reclamo,
+          casos_encontrados: relevantCases.length,
+        });
 
         // Save to Supabase
         const savedId = await saveCase(composedRelato, enrichedAnalysis);
@@ -401,6 +404,11 @@ export default function Home() {
               caseId={caseId}
               onNext={() => {
                 markCompleted("complaint");
+                posthog.capture("complaint_generated", {
+                  empresa: analysis.empresa,
+                  pais: analysis.pais_detectado,
+                  monto_reclamo: analysis.monto_reclamo,
+                });
                 if (caseId) {
                   updateCase(caseId, {
                     complaint_generated: true,
@@ -420,6 +428,10 @@ export default function Home() {
               analysis={analysis}
               onNext={() => {
                 markCompleted("arbitration");
+                posthog.capture("arbitration_completed", {
+                  empresa: analysis.empresa,
+                  pais: analysis.pais_detectado,
+                });
                 if (caseId) {
                   updateCase(caseId, {
                     arbitration_completed: true,
@@ -440,6 +452,12 @@ export default function Home() {
               caseId={caseId}
               onNext={() => {
                 markCompleted("escalation");
+                posthog.capture("case_escalated", {
+                  empresa: analysis.empresa,
+                  pais: analysis.pais_detectado,
+                  monto_reclamo: analysis.monto_reclamo,
+                  via_arbitraje: completedSteps.has("arbitration"),
+                });
                 if (caseId) {
                   updateCase(caseId, {
                     status: "escalado",
@@ -462,6 +480,11 @@ export default function Home() {
               onEscalate={() => setStep("escalation")}
               onFinish={() => {
                 markCompleted("tracking");
+                posthog.capture("case_completed", {
+                  empresa: analysis.empresa,
+                  pais: analysis.pais_detectado,
+                  steps_completed: [...completedSteps],
+                });
                 setStep("feedback");
               }}
             />
