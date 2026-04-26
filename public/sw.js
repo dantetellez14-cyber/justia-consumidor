@@ -9,7 +9,7 @@
  * Cache versions → bump CACHE_VERSION to force refresh on deploy.
  */
 
-const CACHE_VERSION = "justia-v1";
+const CACHE_VERSION = "justia-v3";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -80,8 +80,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static shell routes: Cache First
-  event.respondWith(cacheFirstWithNetwork(request, STATIC_CACHE));
+  // Static shell routes: Network First so deploys always serve fresh HTML
+  event.respondWith(networkFirstWithCache(request, STATIC_CACHE));
 });
 
 // ── Strategy helpers ──────────────────────────────────────────────────────────
