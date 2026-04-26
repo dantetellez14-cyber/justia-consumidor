@@ -3,13 +3,6 @@
 import { Scale, Shield, Clock, FileText, Users, ChevronRight, Building2 } from "lucide-react";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
-import dynamic from "next/dynamic";
-import { Spotlight } from "@/components/ui/spotlight";
-
-const ShaderAnimation = dynamic(
-  () => import("@/components/ui/shader-animation").then((m) => ({ default: m.ShaderAnimation })),
-  { ssr: false, loading: () => <div className="absolute inset-0 z-0" style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), #020617" }} /> }
-);
 
 interface Props {
   readonly onStart: () => void;
@@ -94,12 +87,9 @@ export function WelcomeHero({ onStart }: Props) {
           {/* ── Hero Card ── */}
           <div
             className="w-full rounded-[2.5rem] relative overflow-hidden border border-white/10 flex flex-col items-center justify-center mt-4"
-            style={{ background: "rgba(2,2,10,0.96)", minHeight: "600px" }}
+            style={{ background: "radial-gradient(ellipse at 20% 40%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), rgba(2,2,10,0.98)", minHeight: "600px" }}
           >
-            <ShaderAnimation className="absolute inset-0 z-0" />
-            <Spotlight className="-top-40 left-0 md:left-60 md:-top-20" fill="white" />
-
-            <div className="relative z-10 w-full max-w-4xl px-8 md:px-12 flex flex-col items-center justify-center text-center py-20">
+            <div className="w-full max-w-4xl px-8 md:px-12 flex flex-col items-center justify-center text-center py-20">
               <div
                 className="w-20 h-20 rounded-3xl flex items-center justify-center mb-10 shadow-2xl"
                 style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
