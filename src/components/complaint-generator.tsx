@@ -75,16 +75,41 @@ const TEST_NOMBRE = "Dante Tellez";
 const TEST_EMAIL = "dantetellezao@gmail.com";
 
 // ── Paywall overlay ───────────────────────────────────────────────────────────
-function ProPaywall({ empresa }: { empresa: string }) {
+function ProPaywall({ empresa, analysis }: { empresa: string; analysis: CaseAnalysis }) {
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const { isSignedIn } = useAuth();
 
   const handleUpgrade = async () => {
+    setErrorMsg(null);
+
+    if (!isSignedIn) {
+      window.location.href = "/sign-in";
+      return;
+    }
+
     setLoading(true);
     try {
+      // Persist analysis in localStorage (survives Stripe redirect) so we can restore it after payment
+      localStorage.setItem("pendingAnalysis", JSON.stringify(analysis));
+
       const res = await fetch("/api/stripe/checkout", { method: "POST" });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+
+      if (!res.ok) {
+        setErrorMsg(data.error ?? "Error al procesar el pago. Intenta de nuevo.");
+        setLoading(false);
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setErrorMsg("No se pudo iniciar el pago. Intenta de nuevo.");
+        setLoading(false);
+      }
     } catch {
+      setErrorMsg("Error de conexión. Verifica tu internet e intenta de nuevo.");
       setLoading(false);
     }
   };
@@ -156,6 +181,10 @@ ASUNTO: Reclamo formal por incumplimiento...`}
           {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
           {loading ? "Redirigiendo..." : "Desbloquear por $10/año"}
         </button>
+
+        {errorMsg && (
+          <p className="mt-2 text-xs text-red-500 font-medium">{errorMsg}</p>
+        )}
 
         <p className="mt-3 text-xs text-slate-400">
           Pago seguro vía Stripe · Cancela cuando quieras
@@ -414,7 +443,7 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
   if (!isPro) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-        <ProPaywall empresa={analysis.empresa} />
+        <ProPaywall empresa={analysis.empresa} analysis={analysis} />
         <button
           onClick={onNext}
           className="w-full rounded-lg border border-slate-200 bg-white py-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50"

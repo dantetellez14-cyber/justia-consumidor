@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
       customer_email: email,
       metadata: { userId },
-      success_url: `${origin}/?pro=success`,
-      cancel_url: `${origin}/?pro=cancel`,
+      success_url: `${origin}/pro/success`,
+      cancel_url: `${origin}/`,
       allow_promotion_codes: true,
     });
 

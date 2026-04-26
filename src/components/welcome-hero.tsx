@@ -4,7 +4,15 @@ import { Scale, Shield, Clock, FileText, Users, ChevronRight, Building2 } from "
 import { motion } from "framer-motion";
 import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Spotlight } from "@/components/ui/spotlight";
+
+// Load ShaderAnimation only on client — WebGL cannot run on the server.
+// If WebGL is unavailable (headless/cloud env), the component self-falls-back to CSS.
+const ShaderAnimation = dynamic(
+  () => import("@/components/ui/shader-animation").then((m) => ({ default: m.ShaderAnimation })),
+  { ssr: false, loading: () => <div className="absolute inset-0 z-0" style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), #020617" }} /> }
+);
 
 interface Props {
   readonly onStart: () => void;
@@ -91,10 +99,8 @@ export function WelcomeHero({ onStart }: Props) {
             className="w-full rounded-[2.5rem] relative overflow-hidden border border-white/10 flex flex-col items-center justify-center mt-4"
             style={{ background: "rgba(2,2,10,0.96)", minHeight: "600px" }}
           >
-            {/* Animated gradient background (replaces Three.js shader) */}
-            <div className="absolute inset-0 z-0" style={{
-              background: "radial-gradient(ellipse at 20% 50%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(139,92,246,0.15) 0%, transparent 50%)",
-            }} />
+            {/* Shader animation background — falls back to CSS gradient if WebGL unavailable */}
+            <ShaderAnimation className="absolute inset-0 z-0" />
 
             {/* Spotlight */}
             <Spotlight className="-top-40 left-0 md:left-60 md:-top-20" fill="white" />
@@ -143,16 +149,28 @@ export function WelcomeHero({ onStart }: Props) {
                 transition={{ duration: 0.6, delay: 0.3 }}
                 className="flex flex-col sm:flex-row gap-6 w-full justify-center"
               >
+                {isSignedIn ? (
+                  <button
+                    onClick={onStart}
+                    className="flex items-center justify-center gap-3 px-10 py-5 rounded-2xl text-white font-bold text-xl transition-all hover:scale-105 group"
+                    style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
+                  >
+                    Comenzar tu reclamo
+                    <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                ) : (
+                  <SignInButton mode="modal" fallbackRedirectUrl="/?start=true">
+                    <button
+                      className="flex items-center justify-center gap-3 px-10 py-5 rounded-2xl text-white font-bold text-xl transition-all hover:scale-105 group"
+                      style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
+                    >
+                      Comenzar tu reclamo
+                      <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </SignInButton>
+                )}
                 <button
-                  onClick={onStart}
-                  className="flex items-center justify-center gap-3 px-10 py-5 rounded-2xl text-white font-bold text-xl transition-all hover:scale-105 group"
-                  style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
-                >
-                  Comenzar tu reclamo
-                  <ChevronRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <button
-                  onClick={onStart}
+                  onClick={isSignedIn ? onStart : undefined}
                   className="text-purple-400 font-bold hover:text-purple-300 transition-colors text-lg px-8 py-4"
                 >
                   Ver cómo funciona

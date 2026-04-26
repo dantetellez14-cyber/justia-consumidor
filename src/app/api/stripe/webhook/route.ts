@@ -6,6 +6,9 @@
  * - checkout.session.completed   → activate Pro
  * - customer.subscription.updated → sync status
  * - customer.subscription.deleted → cancel Pro
+ *
+ * Uses SECURITY DEFINER RPCs to bypass RLS regardless of which
+ * Supabase key format (JWT or sb_secret_...) is configured.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,6 +25,7 @@ export async function POST(request: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!sig || !secret) {
+    log.warn({}, "Missing stripe-signature or webhook secret");
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
@@ -33,22 +37,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  log.info({ eventType: event.type, eventId: event.id }, "Webhook received");
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.userId;
-        if (!userId || !session.subscription) break;
+
+        log.info({ userId, subscription: session.subscription }, "checkout.session.completed");
+
+        if (!userId || !session.subscription) {
+          log.warn({ userId, subscription: session.subscription }, "Missing userId or subscription — skipping");
+          break;
+        }
 
         const sub = await stripe.subscriptions.retrieve(session.subscription as string);
+        const rawEnd = sub.items.data[0]?.current_period_end ?? null;
+        const periodEnd = rawEnd ? new Date(rawEnd * 1000).toISOString() : null;
 
-        await upsertSubscription(userId, {
-          stripe_customer_id: session.customer as string,
-          stripe_subscription_id: sub.id,
-          stripe_price_id: sub.items.data[0]?.price.id ?? null,
+        await upsertSubscription({
+          userId,
+          stripeCustomerId: session.customer as string,
+          stripeSubscriptionId: sub.id,
+          stripePriceId: sub.items.data[0]?.price.id ?? null,
           status: "active",
           plan: "pro",
-          current_period_end: new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000).toISOString(),
+          currentPeriodEnd: periodEnd,
         });
 
         log.info({ userId }, "Pro subscription activated");
@@ -58,15 +73,25 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         const userId = await getUserIdByCustomer(sub.customer as string);
-        if (!userId) break;
+
+        log.info({ customerId: sub.customer, userId, status: sub.status }, "customer.subscription.updated");
+
+        if (!userId) {
+          log.warn({ customerId: sub.customer }, "No userId found for customer — skipping");
+          break;
+        }
 
         const isActive = sub.status === "active";
-        await upsertSubscription(userId, {
-          stripe_subscription_id: sub.id,
-          stripe_price_id: sub.items.data[0]?.price.id ?? null,
+        const rawEnd2 = sub.items.data[0]?.current_period_end ?? null;
+        const periodEnd = rawEnd2 ? new Date(rawEnd2 * 1000).toISOString() : null;
+
+        await upsertSubscription({
+          userId,
+          stripeSubscriptionId: sub.id,
+          stripePriceId: sub.items.data[0]?.price.id ?? null,
           status: sub.status as "active" | "inactive" | "canceled" | "past_due",
           plan: isActive ? "pro" : "free",
-          current_period_end: new Date((sub as unknown as { current_period_end: number }).current_period_end * 1000).toISOString(),
+          currentPeriodEnd: periodEnd,
         });
 
         log.info({ userId, status: sub.status }, "Subscription updated");
@@ -76,17 +101,27 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         const userId = await getUserIdByCustomer(sub.customer as string);
-        if (!userId) break;
 
-        await upsertSubscription(userId, {
+        log.info({ customerId: sub.customer, userId }, "customer.subscription.deleted");
+
+        if (!userId) {
+          log.warn({ customerId: sub.customer }, "No userId found for customer — skipping");
+          break;
+        }
+
+        await upsertSubscription({
+          userId,
           status: "canceled",
           plan: "free",
-          current_period_end: null,
+          currentPeriodEnd: null,
         });
 
         log.info({ userId }, "Subscription canceled");
         break;
       }
+
+      default:
+        log.info({ eventType: event.type }, "Unhandled event type — ignoring");
     }
   } catch (err) {
     logError("Stripe webhook handler error", err, {
@@ -99,31 +134,51 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function upsertSubscription(
-  userId: string,
-  data: Partial<{
-    stripe_customer_id: string;
-    stripe_subscription_id: string;
-    stripe_price_id: string | null;
-    status: "active" | "inactive" | "canceled" | "past_due";
-    plan: "free" | "pro";
-    current_period_end: string | null;
-  }>
-) {
-  const { error } = await supabase
-    .from("user_subscriptions")
-    .upsert({ user_id: userId, ...data }, { onConflict: "user_id" });
-
-  if (error) {
-    logError("Supabase upsert subscription error", error, { userId });
-  }
+interface UpsertParams {
+  userId: string;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripePriceId?: string | null;
+  status?: "active" | "inactive" | "canceled" | "past_due";
+  plan?: "free" | "pro";
+  currentPeriodEnd?: string | null;
 }
 
+/**
+ * Calls the SECURITY DEFINER RPC to upsert subscription data.
+ * This bypasses RLS regardless of the supabase client key format.
+ */
+async function upsertSubscription(params: UpsertParams): Promise<void> {
+  const { data, error } = await supabase.rpc("upsert_user_subscription", {
+    p_user_id: params.userId,
+    p_stripe_customer_id: params.stripeCustomerId ?? null,
+    p_stripe_subscription_id: params.stripeSubscriptionId ?? null,
+    p_stripe_price_id: params.stripePriceId ?? null,
+    p_status: params.status ?? null,
+    p_plan: params.plan ?? null,
+    p_current_period_end: params.currentPeriodEnd ?? null,
+  });
+
+  if (error) {
+    logError("upsert_user_subscription RPC error", error, { params });
+    throw new Error(`RPC upsert failed: ${error.message}`);
+  }
+
+  log.info({ userId: params.userId, plan: params.plan }, "Subscription upserted via RPC");
+}
+
+/**
+ * Calls the SECURITY DEFINER RPC to look up user_id by Stripe customer ID.
+ */
 async function getUserIdByCustomer(customerId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from("user_subscriptions")
-    .select("user_id")
-    .eq("stripe_customer_id", customerId)
-    .single();
-  return data?.user_id ?? null;
+  const { data, error } = await supabase.rpc("get_user_id_by_customer", {
+    p_customer_id: customerId,
+  });
+
+  if (error) {
+    logError("get_user_id_by_customer RPC error", error, { customerId });
+    return null;
+  }
+
+  return (data as string | null) ?? null;
 }

@@ -1,6 +1,7 @@
 /**
  * GET /api/stripe/status
  * Returns the current Pro subscription status for the signed-in user.
+ * Uses a SECURITY DEFINER RPC to bypass RLS.
  */
 
 import { NextResponse } from "next/server";
@@ -13,18 +14,23 @@ export async function GET() {
     return NextResponse.json({ isPro: false });
   }
 
-  const { data } = await supabase
-    .from("user_subscriptions")
-    .select("plan, status, current_period_end")
-    .eq("user_id", userId)
-    .single();
+  const { data, error } = await supabase.rpc("get_user_subscription", {
+    p_user_id: userId,
+  });
 
-  const isPro = data?.plan === "pro" && data?.status === "active";
+  if (error) {
+    console.error("[stripe/status] RPC error:", error.message);
+    return NextResponse.json({ isPro: false, plan: "free", status: "inactive", currentPeriodEnd: null });
+  }
+
+  // RPC returns an array of rows (RETURNS TABLE); take the first row
+  const row = Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+  const isPro = row?.plan === "pro" && row?.status === "active";
 
   return NextResponse.json({
     isPro,
-    plan: data?.plan ?? "free",
-    status: data?.status ?? "inactive",
-    currentPeriodEnd: data?.current_period_end ?? null,
+    plan: row?.plan ?? "free",
+    status: row?.status ?? "inactive",
+    currentPeriodEnd: row?.current_period_end ?? null,
   });
 }

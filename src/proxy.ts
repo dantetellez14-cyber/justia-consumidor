@@ -17,6 +17,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/stripe/webhook",
   // Search and public data
   "/api/search-jurisprudencia",
+  // Post-payment success page (handles its own auth state)
+  "/pro/success",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

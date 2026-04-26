@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Scale, Info, ArrowLeft } from "lucide-react";
-import { UserButton, useAuth } from "@clerk/nextjs";
+import { UserButton, useAuth, SignInButton } from "@clerk/nextjs";
 import { CaseAnalysis, FinancialMetrics } from "@/lib/types";
 import { JurisprudenciaCase } from "@/lib/types";
 import { calculateFinancialMetrics } from "@/lib/scoring";
@@ -103,7 +103,40 @@ export default function Home() {
     new Set()
   );
   const [caseId, setCaseId] = useState<string | null>(null);
-  const { isSignedIn } = useAuth();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const { isSignedIn, isLoaded } = useAuth();
+
+  // Handle post-payment and post-signin routing.
+  // Runs client-only (useEffect) — no SSR hydration issues.
+  useEffect(() => {
+    // 1. Check localStorage flag set by /pro/success
+    const proAction = localStorage.getItem("proAction");
+    if (proAction) {
+      localStorage.removeItem("proAction");
+      if (proAction === "restore") {
+        const saved = localStorage.getItem("pendingAnalysis");
+        if (saved) {
+          try {
+            const savedAnalysis: CaseAnalysis = JSON.parse(saved);
+            localStorage.removeItem("pendingAnalysis");
+            setAnalysis(savedAnalysis);
+            setMetrics(calculateFinancialMetrics(savedAnalysis));
+            setStep("complaint");
+            return;
+          } catch { /* fall through to analyze */ }
+        }
+      }
+      setStep("analyze");
+      return;
+    }
+
+    // 2. Check ?start=true URL param (set by Clerk after sign-in redirect)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("start") === "true") {
+      window.history.replaceState({}, "", "/");
+      setStep("analyze");
+    }
+  }, []);
 
   const markCompleted = (s: AppStep) => {
     setCompletedSteps((prev) => new Set([...prev, s]));
@@ -375,6 +408,10 @@ export default function Home() {
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => {
+                    if (!isSignedIn) {
+                      setShowLoginPrompt(true);
+                      return;
+                    }
                     markCompleted("results");
                     setStep("complaint");
                   }}
@@ -501,6 +538,56 @@ export default function Home() {
 
       {step !== "feedback" && <FooterMetrics />}
       <FormulaModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+
+      {/* ── Login prompt modal ── */}
+      {showLoginPrompt && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+          onClick={() => setShowLoginPrompt(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg">
+              <Scale className="h-7 w-7 text-white" />
+            </div>
+
+            <h2 className="text-xl font-black text-slate-800">
+              Casi listo 🎉
+            </h2>
+            <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+              Tu análisis está completo. Inicia sesión para generar tu carta de reclamo formal y guardar tu caso.
+            </p>
+
+            <div className="mt-6 space-y-3">
+              <SignInButton mode="modal" fallbackRedirectUrl="/?continuar=reclamo">
+                <button
+                  className="w-full rounded-xl py-3 text-sm font-bold text-white shadow-md transition-all hover:scale-[1.02]"
+                  style={{ background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)" }}
+                  onClick={() => setShowLoginPrompt(false)}
+                >
+                  Iniciar sesión con Google
+                </button>
+              </SignInButton>
+
+              <button
+                onClick={() => setShowLoginPrompt(false)}
+                className="w-full rounded-xl border border-slate-200 py-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <p className="mt-4 text-xs text-slate-400">
+              Gratis · Sin tarjeta requerida para iniciar sesión
+            </p>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
