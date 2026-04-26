@@ -150,6 +150,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(normalizedAnalysis);
   } catch (err) {
     logError("Gemini analysis error", err, { route: "/api/analyze" });
+
+    const message = err instanceof Error ? err.message : "";
+    // Quota exhausted or auth error → tell the user, don't fake a result
+    if (/quota|429|resource.exhausted|api.key|permission/i.test(message)) {
+      return NextResponse.json(
+        { error: "El servicio de análisis no está disponible temporalmente. Intenta en unos minutos." },
+        { status: 503 }
+      );
+    }
+
+    // Any other error (network, JSON parse, etc.) → demo fallback
     return NextResponse.json(generateDemoAnalysis(relato));
   }
 }
