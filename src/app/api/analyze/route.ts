@@ -2,31 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { logError, createRouteLogger } from "@/lib/logger";
-import { trackTokenUsage, estimateTokens } from "@/lib/track-tokens";
+import { trackTokenUsage } from "@/lib/track-tokens";
 
 const log = createRouteLogger("/api/analyze");
-
-const RAW_OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-
-// Guard against SSRF: only allow connections to localhost / 127.0.0.1
-function validateOllamaUrl(raw: string): string {
-  try {
-    const parsed = new URL(raw);
-    const hostname = parsed.hostname;
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      throw new Error(`OLLAMA_URL must point to localhost, got: ${hostname}`);
-    }
-    return raw;
-  } catch (err) {
-    if (err instanceof TypeError) {
-      throw new Error(`OLLAMA_URL is not a valid URL: ${raw}`);
-    }
-    throw err;
-  }
-}
-
-const OLLAMA_URL = validateOllamaUrl(RAW_OLLAMA_URL);
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "gemma2:9b";
 
 const SYSTEM_PROMPT = `Actúa como un experto legal en derecho del consumo de Argentina y México.
 Analiza el relato del usuario y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional.
@@ -52,20 +30,17 @@ Reglas estrictas:
 - pais_detectado debe ser exactamente "AR" o "MX".`;
 
 function extractJSON(text: string): Record<string, unknown> {
-  // Try direct parse first
   try {
     return JSON.parse(text);
   } catch {
     // ignore
   }
 
-  // Try extracting from markdown code block
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     return JSON.parse(codeBlockMatch[1].trim());
   }
 
-  // Try finding first { ... } block
   const braceMatch = text.match(/\{[\s\S]*\}/);
   if (braceMatch) {
     return JSON.parse(braceMatch[0]);
@@ -76,7 +51,7 @@ function extractJSON(text: string): Record<string, unknown> {
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth().catch(() => ({ userId: null as string | null }));
-  // Rate limit: 10 analyses per minute per IP
+
   const ip = getClientIp(request);
   const { allowed, resetIn } = await rateLimit(`analyze:${ip}`, {
     limit: 10,
@@ -94,65 +69,55 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "Cuerpo de solicitud inválido." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Cuerpo de solicitud inválido." }, { status: 400 });
   }
 
   const { analyzeSchema, formatZodError } = await import("@/lib/validations");
   const parsed = analyzeSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: formatZodError(parsed.error) },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
 
   const { relato } = parsed.data;
 
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(generateDemoAnalysis(relato));
+  }
+
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: relato },
-        ],
-        stream: false,
-        format: "json",
-        options: {
-          temperature: 0.3,
-          num_predict: 1024,
-        },
-      }),
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genai = new GoogleGenerativeAI(apiKey);
+    const model = genai.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: SYSTEM_PROMPT,
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1024,
+        responseMimeType: "application/json",
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Ollama error (${response.status}): ${errorText}`);
-    }
+    const t0 = Date.now();
+    const result = await model.generateContent(relato);
+    const latencyMs = Date.now() - t0;
+    const rawText = result.response.text();
 
-    const result = await response.json();
-    const rawText: string = result.message?.content ?? "";
-
-    // Track estimated tokens (Ollama doesn't return usage metadata)
+    const usage = result.response.usageMetadata;
     void trackTokenUsage({
       userId: userId ?? null,
       route: "/api/analyze",
-      model: OLLAMA_MODEL,
-      provider: "ollama",
-      inputTokens: estimateTokens(SYSTEM_PROMPT + relato),
-      outputTokens: estimateTokens(rawText),
+      model: "gemini-2.0-flash",
+      provider: "gemini",
+      inputTokens: usage?.promptTokenCount ?? 0,
+      outputTokens: usage?.candidatesTokenCount ?? 0,
+      latencyMs,
       success: true,
     });
 
     const analysis = extractJSON(rawText);
 
-    // Validate required fields
     const required = [
       "empresa",
       "producto_servicio",
@@ -169,35 +134,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Normalize pais_detectado
     const pais = String(analysis.pais_detectado).toUpperCase();
     const normalizedAnalysis = {
       ...analysis,
       monto_reclamo: Number(analysis.monto_reclamo),
-      probabilidad_exito: Math.min(
-        1,
-        Math.max(0, Number(analysis.probabilidad_exito))
-      ),
+      probabilidad_exito: Math.min(1, Math.max(0, Number(analysis.probabilidad_exito))),
       pais_detectado: pais === "MX" ? "MX" : "AR",
     };
 
     log.info(
-      { empresa: String(analysis.empresa), pais: normalizedAnalysis.pais_detectado },
+      { empresa: String(analysis.empresa), pais: normalizedAnalysis.pais_detectado, latencyMs },
       "Analysis completed"
     );
 
     return NextResponse.json(normalizedAnalysis);
   } catch (err) {
-    logError("Ollama API error", err, { route: "/api/analyze" });
-
-    // Fallback: generate a demo analysis when Ollama is unavailable (e.g., Vercel production)
-    if (process.env.DEMO_MODE === "true" || (err instanceof TypeError && String(err.message).includes("fetch"))) {
-      return NextResponse.json(generateDemoAnalysis(relato));
-    }
-
-    const message =
-      err instanceof Error ? err.message : "Error al analizar el caso con IA.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    logError("Gemini analysis error", err, { route: "/api/analyze" });
+    return NextResponse.json(generateDemoAnalysis(relato));
   }
 }
 
