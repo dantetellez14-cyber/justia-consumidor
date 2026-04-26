@@ -120,7 +120,7 @@ Reglas:
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genai = new GoogleGenerativeAI(apiKey);
     const model = genai.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 1024,
@@ -138,7 +138,7 @@ Reglas:
     void trackTokenUsage({
       userId,
       route: "/api/arbitrate",
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       provider: "gemini",
       inputTokens: usage?.promptTokenCount ?? 0,
       outputTokens: usage?.candidatesTokenCount ?? 0,
