@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 // Injects a unique CACHE_VERSION into public/sw.js at build time.
 // Uses VERCEL_GIT_COMMIT_SHA (available on Vercel) or a timestamp fallback.
 const fs = require("fs");

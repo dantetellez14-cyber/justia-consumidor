@@ -78,6 +78,7 @@ const TEST_EMAIL = "dantetellezao@gmail.com";
 function ProPaywall({ empresa, analysis }: { empresa: string; analysis: CaseAnalysis }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [plan, setPlan] = useState<"annual" | "monthly">("annual");
   const { isSignedIn } = useAuth();
 
   const handleUpgrade = async () => {
@@ -93,7 +94,11 @@ function ProPaywall({ empresa, analysis }: { empresa: string; analysis: CaseAnal
       // Persist analysis in localStorage (survives Stripe redirect) so we can restore it after payment
       localStorage.setItem("pendingAnalysis", JSON.stringify(analysis));
 
-      const res = await fetch("/api/stripe/checkout", { method: "POST" });
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -150,11 +155,42 @@ ASUNTO: Reclamo formal por incumplimiento...`}
           Desbloquea el documento completo con JustIA Pro
         </p>
 
-        {/* Price */}
-        <div className="my-5 inline-flex items-end gap-1">
-          <span className="text-4xl font-black text-slate-900">$10</span>
-          <span className="mb-1 text-base text-slate-500">USD / año</span>
+        {/* Plan toggle */}
+        <div className="my-5 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+          <button
+            onClick={() => setPlan("annual")}
+            className={`relative rounded-lg px-4 py-2 text-sm font-semibold transition-all ${plan === "annual" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            Anual
+            {plan === "annual" && (
+              <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                -17%
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setPlan("monthly")}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${plan === "monthly" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+          >
+            Mensual
+          </button>
         </div>
+
+        {/* Price */}
+        {plan === "annual" ? (
+          <div className="mb-1 inline-flex items-end gap-1">
+            <span className="text-4xl font-black text-slate-900">$12</span>
+            <span className="mb-1 text-base text-slate-500">USD / año</span>
+          </div>
+        ) : (
+          <div className="mb-1 inline-flex items-end gap-1">
+            <span className="text-4xl font-black text-slate-900">$1.50</span>
+            <span className="mb-1 text-base text-slate-500">USD / mes</span>
+          </div>
+        )}
+        <p className="mb-4 text-xs text-slate-400">
+          {plan === "annual" ? "≈ $1/mes · facturado anualmente" : "facturado mensualmente"}
+        </p>
 
         {/* Features */}
         <ul className="mb-6 space-y-2 text-left mx-auto max-w-xs">
@@ -179,7 +215,7 @@ ASUNTO: Reclamo formal por incumplimiento...`}
           style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)" }}
         >
           {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
-          {loading ? "Redirigiendo..." : "Desbloquear por $10/año"}
+          {loading ? "Redirigiendo..." : plan === "annual" ? "Desbloquear por $12/año" : "Desbloquear por $1.50/mes"}
         </button>
 
         {errorMsg && (

@@ -18,16 +18,6 @@ export function ShaderAnimation({ className }: { className?: string }) {
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Test WebGL availability before initializing Three.js
-    const testCanvas = document.createElement("canvas")
-    const gl =
-      testCanvas.getContext("webgl") ??
-      testCanvas.getContext("experimental-webgl")
-    if (!gl) {
-      setWebglFailed(true)
-      return
-    }
-
     const container = containerRef.current
 
     const vertexShader = `
@@ -61,6 +51,11 @@ export function ShaderAnimation({ className }: { className?: string }) {
     `
 
     try {
+      // Test WebGL availability before initializing Three.js
+      const testCanvas = document.createElement("canvas")
+      const gl = testCanvas.getContext("webgl") ?? testCanvas.getContext("experimental-webgl")
+      if (!gl) throw new Error("WebGL not available")
+
       const camera = new THREE.Camera()
       camera.position.z = 1
 

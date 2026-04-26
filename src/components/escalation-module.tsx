@@ -286,8 +286,8 @@ export function EscalationModule({
   const docLabel = isMX ? "CURP" : "DNI";
   const idLabel = isMX ? "RFC de la empresa" : "CUIT de la empresa";
 
-  // Build form data
-  const formData: EscalationFormData = {
+  // Build form data — memoized so advanceToDocument gets a stable reference
+  const formData = useMemo<EscalationFormData>(() => ({
     nombreCompleto,
     documento,
     domicilio,
@@ -306,7 +306,7 @@ export function EscalationModule({
     reclamoDirectoRealizado: true,
     fechaReclamoDirecto: fechaReclamoDirecto || undefined,
     numeroReclamoDirecto: numeroReclamo || undefined,
-  };
+  }), [nombreCompleto, documento, domicilio, email, telefono, analysis, empresaDomicilio, isMX, empresaId, resolucion, fechaReclamoDirecto, numeroReclamo]);
 
   const canProceedForm =
     nombreCompleto.trim() && documento.trim() && email.trim();

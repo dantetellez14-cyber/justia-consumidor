@@ -1,5 +1,14 @@
 import * as Sentry from "@sentry/nextjs";
 
+if (
+  typeof window !== "undefined" &&
+  process.env.NEXT_PUBLIC_MSW_ENABLED === "true"
+) {
+  import("./e2e/mocks/worker").then(({ worker }) => {
+    worker.start({ onUnhandledRequest: "bypass" });
+  });
+}
+
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   sendDefaultPii: true,

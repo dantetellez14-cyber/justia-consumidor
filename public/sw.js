@@ -9,7 +9,7 @@
  * Cache versions → bump CACHE_VERSION to force refresh on deploy.
  */
 
-const CACHE_VERSION = "justia-mog75gvf";
+const CACHE_VERSION = "justia-mog8c8cl";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -21,11 +21,6 @@ const PRECACHE_URLS = [
   "/empresas",
   "/offline",
   "/manifest.json",
-];
-
-const API_CACHE_URLS = [
-  "/api/cases",
-  "/api/notifications",
 ];
 
 // ── Install: precache shell ───────────────────────────────────────────────────
@@ -85,24 +80,6 @@ self.addEventListener("fetch", (event) => {
 });
 
 // ── Strategy helpers ──────────────────────────────────────────────────────────
-
-async function cacheFirstWithNetwork(request, cacheName) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    // Offline fallback
-    const offline = await caches.match("/offline");
-    return offline || new Response("Sin conexión", { status: 503 });
-  }
-}
 
 async function networkFirstWithCache(request, cacheName) {
   const controller = new AbortController();

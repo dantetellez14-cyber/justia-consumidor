@@ -90,7 +90,7 @@ async function updateCase(caseId: string, updates: Record<string, unknown>): Pro
 
 export default function Home() {
   const [step, setStep] = useState<AppStep>("welcome");
-  const [relato, setRelato] = useState("");
+  const [, setRelato] = useState("");
   const [analysis, setAnalysis] = useState<CaseAnalysis | null>(null);
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [relevantCases, setRelevantCases] = useState<
@@ -104,7 +104,7 @@ export default function Home() {
   );
   const [caseId, setCaseId] = useState<string | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn } = useAuth();
 
   // Handle post-payment and post-signin routing.
   // Runs client-only (useEffect) — no SSR hydration issues.
@@ -236,7 +236,7 @@ export default function Home() {
         setLoading(false);
       }
     },
-    []
+    [relevantCases.length]
   );
 
   const handleRestart = () => {

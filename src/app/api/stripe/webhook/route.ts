@@ -149,7 +149,7 @@ interface UpsertParams {
  * This bypasses RLS regardless of the supabase client key format.
  */
 async function upsertSubscription(params: UpsertParams): Promise<void> {
-  const { data, error } = await supabase.rpc("upsert_user_subscription", {
+  const { error } = await supabase.rpc("upsert_user_subscription", {
     p_user_id: params.userId,
     p_stripe_customer_id: params.stripeCustomerId ?? null,
     p_stripe_subscription_id: params.stripeSubscriptionId ?? null,

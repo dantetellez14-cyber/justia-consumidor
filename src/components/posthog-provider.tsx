@@ -1,17 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { initPostHog, posthog, getStoredConsent } from "@/lib/posthog";
+import { initPostHog, posthog } from "@/lib/posthog";
 import { CookieConsentBanner } from "./cookie-consent-banner";
 
 export function PostHogProvider({ children }: { readonly children: React.ReactNode }) {
   const { userId } = useAuth();
-  const [consentGiven, setConsentGiven] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return getStoredConsent() === "accepted";
-  });
-
   // Initialize PostHog immediately on mount (opt-out model)
   useEffect(() => {
     initPostHog();
@@ -27,7 +22,6 @@ export function PostHogProvider({ children }: { readonly children: React.ReactNo
   }, [userId]);
 
   const handleConsent = (accepted: boolean) => {
-    setConsentGiven(accepted);
     if (!accepted) {
       // User rejected — opt out and clear data
       posthog.opt_out_capturing();

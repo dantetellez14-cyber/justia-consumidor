@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { stripe, STRIPE_PRICE_ID } from "@/lib/stripe";
+import { stripe, STRIPE_PRICE_ID, STRIPE_PRICE_ID_MONTHLY } from "@/lib/stripe";
 import { logError } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
@@ -20,11 +20,21 @@ export async function POST(request: NextRequest) {
 
   const origin = request.headers.get("origin") ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://justia-consumidor.vercel.app";
 
+  let plan: "monthly" | "annual" = "annual";
+  try {
+    const body = await request.json();
+    if (body?.plan === "monthly") plan = "monthly";
+  } catch {
+    // no body or invalid JSON — default to annual
+  }
+
+  const priceId = plan === "monthly" ? STRIPE_PRICE_ID_MONTHLY : STRIPE_PRICE_ID;
+
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email,
       metadata: { userId },
       success_url: `${origin}/pro/success`,

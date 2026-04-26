@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import {
   Building2,
-  Scale,
   AlertCircle,
   BarChart3,
   Clock,
@@ -494,7 +493,6 @@ function StatsGrid({ stats }: { readonly stats: CompanyDashboardStats }) {
 // ── Metrics bar ──
 
 function MetricsBar({ stats }: { readonly stats: CompanyDashboardStats }) {
-  const moneda = ""; // Generic since company may have both AR/MX cases
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -633,7 +631,6 @@ function ComplaintList({
 
 function ComplaintDetail({
   complaint,
-  companyId,
   verificada,
   onBack,
   onResponded,

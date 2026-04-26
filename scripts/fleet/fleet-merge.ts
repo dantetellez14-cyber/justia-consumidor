@@ -15,7 +15,7 @@
 import path from "node:path";
 import { findUpSync } from "find-up";
 import type { IssueAnalysis, Task } from "./types.js";
-import { getGitRepoInfo, getCurrentBranch } from "./github/git.js";
+import { getGitRepoInfo } from "./github/git.js";
 import { jules } from "@google/jules-sdk";
 
 const repoInfo = await getGitRepoInfo();
