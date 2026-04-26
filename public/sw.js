@@ -9,7 +9,7 @@
  * Cache versions → bump CACHE_VERSION to force refresh on deploy.
  */
 
-const CACHE_VERSION = "justia-v3";
+const CACHE_VERSION = "justia-mog75gvf";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
