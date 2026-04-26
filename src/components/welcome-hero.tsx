@@ -108,8 +108,8 @@ export function WelcomeHero({ onStart }: Props) {
             {/* Centered content */}
             <div className="relative z-10 w-full max-w-4xl px-8 md:px-12 flex flex-col items-center justify-center text-center py-20">
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
                 transition={{ duration: 0.5 }}
                 className="w-20 h-20 rounded-3xl flex items-center justify-center mb-10 shadow-2xl"
                 style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
@@ -118,8 +118,8 @@ export function WelcomeHero({ onStart }: Props) {
               </motion.div>
 
               <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8"
                 style={{ color: "transparent", backgroundImage: "linear-gradient(to bottom, #f8fafc, #94a3b8)", backgroundClip: "text", WebkitBackgroundClip: "text" }}
@@ -134,8 +134,8 @@ export function WelcomeHero({ onStart }: Props) {
               </motion.h1>
 
               <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="text-neutral-300 text-xl md:text-2xl max-w-3xl mb-14 leading-relaxed font-medium"
               >
@@ -144,8 +144,8 @@ export function WelcomeHero({ onStart }: Props) {
               </motion.p>
 
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ duration: 0.6, delay: 0.3 }}
                 className="flex flex-col sm:flex-row gap-6 w-full justify-center"
               >
