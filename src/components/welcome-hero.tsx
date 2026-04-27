@@ -89,7 +89,7 @@ export function WelcomeHero({ onStart }: Props) {
             className="w-full rounded-[2.5rem] relative overflow-hidden border border-white/10 flex flex-col items-center justify-center mt-4"
             style={{ background: "radial-gradient(ellipse at 20% 40%, rgba(168,85,247,0.25) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.2) 0%, transparent 50%), rgba(2,2,10,0.98)", minHeight: "600px" }}
           >
-            <div className="w-full max-w-4xl px-8 md:px-12 flex flex-col items-center justify-center text-center py-20">
+            <div className="w-full max-w-4xl px-5 sm:px-8 md:px-12 flex flex-col items-center justify-center text-center py-12 sm:py-20">
               <div
                 className="w-20 h-20 rounded-3xl flex items-center justify-center mb-10 shadow-2xl"
                 style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
@@ -98,7 +98,7 @@ export function WelcomeHero({ onStart }: Props) {
               </div>
 
               <h1
-                className="text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8"
+                className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] mb-8"
                 style={{ color: "transparent", backgroundImage: "linear-gradient(to bottom, #f8fafc, #94a3b8)", backgroundClip: "text", WebkitBackgroundClip: "text" }}
               >
                 Defendé tus derechos{" "}
@@ -110,16 +110,16 @@ export function WelcomeHero({ onStart }: Props) {
                 </span>
               </h1>
 
-              <p className="text-neutral-300 text-xl md:text-2xl max-w-3xl mb-14 leading-relaxed font-medium">
+              <p className="text-neutral-300 text-base sm:text-xl md:text-2xl max-w-3xl mb-10 sm:mb-14 leading-relaxed font-medium">
                 La justicia no debe ser un laberinto, sino un camino con señales claras.
                 Nuestra IA te asesora, genera tu reclamo y te acompaña hasta la resolución.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-6 w-full justify-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:gap-6 w-full justify-center">
                 {isSignedIn ? (
                   <button
                     onClick={onStart}
-                    className="flex items-center justify-center gap-3 px-10 py-5 rounded-2xl text-white font-bold text-xl transition-all hover:scale-105 group"
+                    className="flex items-center justify-center gap-3 px-6 sm:px-10 py-4 sm:py-5 rounded-2xl text-white font-bold text-lg sm:text-xl transition-all hover:scale-105 group"
                     style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
                   >
                     Comenzar tu reclamo
@@ -128,7 +128,7 @@ export function WelcomeHero({ onStart }: Props) {
                 ) : (
                   <SignInButton mode="modal" fallbackRedirectUrl="/?start=true">
                     <button
-                      className="flex items-center justify-center gap-3 px-10 py-5 rounded-2xl text-white font-bold text-xl transition-all hover:scale-105 group"
+                      className="flex items-center justify-center gap-3 px-6 sm:px-10 py-4 sm:py-5 rounded-2xl text-white font-bold text-lg sm:text-xl transition-all hover:scale-105 group"
                       style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", boxShadow: "0 25px 50px -12px rgba(168,85,247,0.3)" }}
                     >
                       Comenzar tu reclamo
@@ -200,7 +200,7 @@ export function WelcomeHero({ onStart }: Props) {
           {/* ── Company CTA ── */}
           <section>
             <div
-              className="rounded-[2rem] p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 border border-emerald-500/10"
+              className="rounded-[2rem] p-5 sm:p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-5 sm:gap-8 border border-emerald-500/10"
               style={{ background: "rgba(16,185,129,0.05)" }}
             >
               <div className="flex items-center gap-6">

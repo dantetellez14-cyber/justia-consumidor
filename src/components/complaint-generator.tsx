@@ -179,12 +179,12 @@ ASUNTO: Reclamo formal por incumplimiento...`}
         {/* Price */}
         {plan === "annual" ? (
           <div className="mb-1 inline-flex items-end gap-1">
-            <span className="text-4xl font-black text-slate-900">$12</span>
+            <span className="text-3xl sm:text-4xl font-black text-slate-900">$12</span>
             <span className="mb-1 text-base text-slate-500">USD / año</span>
           </div>
         ) : (
           <div className="mb-1 inline-flex items-end gap-1">
-            <span className="text-4xl font-black text-slate-900">$1.50</span>
+            <span className="text-3xl sm:text-4xl font-black text-slate-900">$1.50</span>
             <span className="mb-1 text-base text-slate-500">USD / mes</span>
           </div>
         )}
@@ -582,7 +582,7 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
         </div>
 
         {/* Actions */}
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
           {empresaEmail.trim() && nombre.trim() && email.trim() && (
             <button
               onClick={handleSendViaResend}

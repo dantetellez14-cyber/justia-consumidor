@@ -241,7 +241,7 @@ export default function MisCasosPage() {
                     </div>
 
                     {/* Right: metrics + expand toggle */}
-                    <div className="flex items-center gap-6 sm:text-right">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-6 sm:text-right">
                       {c.monto_reclamo != null && (
                         <div>
                           <p className="text-xs text-slate-400">Monto</p>
@@ -264,7 +264,7 @@ export default function MisCasosPage() {
                       <Link
                         href={`/mis-casos/seguimiento?id=${c.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-800"
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-800"
                       >
                         Ver timeline
                       </Link>
