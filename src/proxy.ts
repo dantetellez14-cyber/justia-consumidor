@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
 // Public routes: welcome page, API analyze (demo), and static assets
 const isPublicRoute = createRouteMatcher([
@@ -10,7 +11,8 @@ const isPublicRoute = createRouteMatcher([
   "/privacidad",
   "/terminos",
   "/empresa",
-  // Cron/admin routes authenticate via CRON_SECRET header, not Clerk
+  "/offline",
+  // Cron/admin API routes authenticate via CRON_SECRET or ADMIN_SECRET header
   "/api/admin/(.*)",
   "/api/cron/(.*)",
   // Stripe webhook uses its own signature verification
@@ -21,9 +23,29 @@ const isPublicRoute = createRouteMatcher([
   "/pro/success",
 ]);
 
+// Admin UI pages require both authentication AND admin role
+const isAdminPage = createRouteMatcher(["/admin(.*)"]);
+
+function isAdminUser(userId: string): boolean {
+  const adminIds = (process.env.ADMIN_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return adminIds.includes(userId);
+}
+
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
+  if (isPublicRoute(request)) return;
+
+  // Require Clerk session for all non-public routes
+  await auth.protect();
+
+  // Admin pages: redirect non-admin users to home instead of showing the UI
+  if (isAdminPage(request)) {
+    const { userId } = await auth();
+    if (!userId || !isAdminUser(userId)) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
   }
 });
 
