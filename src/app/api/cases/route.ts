@@ -7,6 +7,7 @@ import {
   formatZodError,
 } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { findCompanyByName } from "@/lib/empresa-matcher";
 
 // POST: Create a new case after AI analysis
 export async function POST(request: NextRequest) {
@@ -45,18 +46,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Try to match to a registered empresa (non-blocking)
+  const companyMatch = await findCompanyByName(
+    parsed.data.empresa,
+    parsed.data.pais_detectado
+  ).catch(() => null);
+
   const { data, error } = await supabase
     .from("cases")
     .insert({
       ...parsed.data,
       status: "consulta_recibida",
       user_id: userId,
+      ...(companyMatch ? { company_id: companyMatch.companyId } : {}),
     })
     .select()
     .single();
 
   if (error) {
     return NextResponse.json({ error: "Error al crear el caso." }, { status: 500 });
+  }
+
+  // Increment monthly usage counter for matched empresa (non-blocking)
+  if (companyMatch) {
+    void supabase
+      .rpc("upsert_empresa_usage_period", {
+        p_company_id: companyMatch.companyId,
+        p_included_cases: 5,
+      });
   }
 
   return NextResponse.json(data);

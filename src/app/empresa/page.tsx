@@ -25,6 +25,8 @@ import {
   HandshakeIcon,
   HelpCircle,
   Loader2,
+  Zap,
+  CreditCard,
 } from "lucide-react";
 import type {
   CompanyAccount,
@@ -432,6 +434,134 @@ function CompanySuggestion({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// ── Plan labels ──
+
+const PLAN_LABELS: Record<string, { label: string; color: string }> = {
+  starter: { label: "Starter (Gratis)", color: "bg-slate-100 text-slate-600" },
+  smb:     { label: "SMB — $99/mes",    color: "bg-blue-100 text-blue-700" },
+  mid:     { label: "Mid Market — $299/mes", color: "bg-purple-100 text-purple-700" },
+  enterprise: { label: "Enterprise",    color: "bg-amber-100 text-amber-700" },
+};
+
+interface PlanStatus {
+  plan: string;
+  subscription_status: string;
+  included_cases: number;
+  cases_this_month: number;
+  overage_cases: number;
+  overage_price_cents: number;
+  base_price_cents: number;
+}
+
+// ── Plan & Usage card ──
+
+function PlanUsageCard({ companyId }: { readonly companyId: string }) {
+  const { data, isLoading } = useSWR<PlanStatus>(
+    companyId ? "/api/empresa/billing" : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60000 }
+  );
+  const [upgrading, setUpgrading] = useState(false);
+
+  const handleUpgrade = async (plan: "smb" | "mid") => {
+    setUpgrading(true);
+    try {
+      const res = await fetch("/api/empresa/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const json = await res.json();
+      if (json.url) window.location.href = json.url;
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  if (isLoading || !data) {
+    return (
+      <div className="h-24 animate-pulse rounded-xl border border-slate-200 bg-white" />
+    );
+  }
+
+  const planCfg = PLAN_LABELS[data.plan] ?? PLAN_LABELS.starter;
+  const usagePct = data.included_cases > 0
+    ? Math.min((data.cases_this_month / data.included_cases) * 100, 100)
+    : 0;
+  const isStarter = data.plan === "starter";
+  const nearLimit = usagePct >= 80;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-slate-400" />
+          <span className="text-sm font-semibold text-slate-600">Plan actual</span>
+        </div>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${planCfg.color}`}>
+          {planCfg.label}
+        </span>
+      </div>
+
+      {/* Usage gauge */}
+      <div className="mb-4">
+        <div className="mb-1.5 flex items-center justify-between text-xs text-slate-500">
+          <span>Casos este mes</span>
+          <span className={nearLimit ? "font-semibold text-amber-600" : ""}>
+            {data.cases_this_month} / {data.included_cases === -1 ? "∞" : data.included_cases}
+          </span>
+        </div>
+        {data.included_cases !== -1 && (
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all ${
+                usagePct >= 100 ? "bg-red-400" : nearLimit ? "bg-amber-400" : "bg-emerald-400"
+              }`}
+              style={{ width: `${usagePct}%` }}
+            />
+          </div>
+        )}
+        {data.overage_cases > 0 && (
+          <p className="mt-1 text-xs text-red-500">
+            {data.overage_cases} caso{data.overage_cases > 1 ? "s" : ""} en excedente
+            · ${((data.overage_cases * data.overage_price_cents) / 100).toFixed(2)} USD
+          </p>
+        )}
+      </div>
+
+      {/* Upgrade CTA */}
+      {isStarter && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={() => handleUpgrade("smb")}
+            disabled={upgrading}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 py-2 text-xs font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            SMB — 50 casos · $99/mes
+          </button>
+          <button
+            onClick={() => handleUpgrade("mid")}
+            disabled={upgrading}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-60"
+          >
+            Mid Market — 200 casos · $299/mes
+          </button>
+        </div>
+      )}
+
+      {!isStarter && (
+        <p className="text-xs text-slate-400">
+          Ahorro estimado vs. abogado:{" "}
+          <span className="font-semibold text-emerald-600">
+            ${(data.cases_this_month * 350).toLocaleString()} USD
+          </span>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1065,6 +1195,7 @@ export default function EmpresaPage() {
             )}
             <StatsGrid stats={data.stats} />
             <MetricsBar stats={data.stats} />
+            {data.account && <PlanUsageCard companyId={data.account.id} />}
 
             {/* Complaints list */}
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

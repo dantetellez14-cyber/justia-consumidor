@@ -10,3 +10,9 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID!;
 export const STRIPE_PRICE_ID_MONTHLY = process.env.STRIPE_PRICE_ID_MONTHLY!;
+
+// Empresa B2B plans — hybrid: flat base + metered overage
+export const STRIPE_EMPRESA_SMB_BASE     = process.env.STRIPE_EMPRESA_SMB_BASE!;
+export const STRIPE_EMPRESA_SMB_OVERAGE  = process.env.STRIPE_EMPRESA_SMB_OVERAGE!;
+export const STRIPE_EMPRESA_MID_BASE     = process.env.STRIPE_EMPRESA_MID_BASE!;
+export const STRIPE_EMPRESA_MID_OVERAGE  = process.env.STRIPE_EMPRESA_MID_OVERAGE!;
