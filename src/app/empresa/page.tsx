@@ -460,22 +460,30 @@ interface PlanStatus {
 
 function PlanUsageCard({ companyId }: { readonly companyId: string }) {
   const { data, isLoading } = useSWR<PlanStatus>(
-    companyId ? "/api/empresa/billing" : null,
+    companyId ? `/api/empresa/billing?company=${companyId}` : null,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
+    { revalidateOnFocus: false, dedupingInterval: 15_000 }
   );
   const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
   const handleUpgrade = async (plan: "smb" | "mid") => {
     setUpgrading(true);
+    setUpgradeError(null);
     try {
       const res = await fetch("/api/empresa/billing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      const json = await res.json();
-      if (json.url) window.location.href = json.url;
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.url) {
+        setUpgradeError(json?.error ?? "No se pudo iniciar el pago. Intenta de nuevo.");
+        return;
+      }
+      window.location.href = json.url;
+    } catch {
+      setUpgradeError("No se pudo iniciar el pago. Intenta de nuevo.");
     } finally {
       setUpgrading(false);
     }
@@ -559,6 +567,12 @@ function PlanUsageCard({ companyId }: { readonly companyId: string }) {
           <span className="font-semibold text-emerald-600">
             ${(data.cases_this_month * 350).toLocaleString()} USD
           </span>
+        </p>
+      )}
+
+      {upgradeError && (
+        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+          {upgradeError}
         </p>
       )}
     </div>

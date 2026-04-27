@@ -2,8 +2,13 @@ import { supabase } from "@/lib/supabase";
 import { normalizeEmpresaName } from "@/lib/empresa";
 
 export interface CompanyMatch {
-  companyId: string;
-  companyName: string;
+  readonly companyId: string;
+  readonly companyName: string;
+}
+
+/** Escape LIKE/ILIKE wildcards so user input cannot widen the pattern. */
+function escapeLike(input: string): string {
+  return input.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
 /**
@@ -11,8 +16,7 @@ export interface CompanyMatch {
  * Returns the matched company_accounts.id, or null if no match.
  */
 export async function findCompanyByName(
-  empresaName: string | null | undefined,
-  _pais?: string
+  empresaName: string | null | undefined
 ): Promise<CompanyMatch | null> {
   if (!empresaName) return null;
 
@@ -20,8 +24,9 @@ export async function findCompanyByName(
   if (!normalized) return null;
 
   // Use the first significant word (≥4 chars) for the ilike search
-  const keyword = normalized.split(" ").find((w) => w.length >= 4) ?? normalized.split(" ")[0];
-  if (!keyword) return null;
+  const keywordRaw = normalized.split(" ").find((w) => w.length >= 4) ?? normalized.split(" ")[0];
+  if (!keywordRaw) return null;
+  const keyword = escapeLike(keywordRaw);
 
   const { data: companies } = await supabase
     .from("company_accounts")
@@ -31,11 +36,15 @@ export async function findCompanyByName(
 
   if (!companies || companies.length === 0) return null;
 
-  // Find best match: normalized names must overlap
+  // Best-match against the already-normalized column
   for (const company of companies) {
-    const compNorm = normalizeEmpresaName(company.nombre as string);
+    const id = company.id as string | null;
+    const nombre = company.nombre as string | null;
+    const compNorm = (company.nombre_normalizado as string | null) ?? "";
+    if (!id || !nombre || !compNorm) continue;
+
     if (compNorm === normalized || compNorm.includes(normalized) || normalized.includes(compNorm)) {
-      return { companyId: company.id as string, companyName: company.nombre as string };
+      return { companyId: id, companyName: nombre };
     }
   }
 

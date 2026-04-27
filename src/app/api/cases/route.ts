@@ -8,6 +8,7 @@ import {
 } from "@/lib/validations";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { findCompanyByName } from "@/lib/empresa-matcher";
+import { logError } from "@/lib/logger";
 
 // POST: Create a new case after AI analysis
 export async function POST(request: NextRequest) {
@@ -26,6 +27,12 @@ export async function POST(request: NextRequest) {
   }
 
   const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json(
+      { error: "Debes iniciar sesión para crear un caso." },
+      { status: 401 }
+    );
+  }
 
   let body: unknown;
   try {
@@ -47,10 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Try to match to a registered empresa (non-blocking)
-  const companyMatch = await findCompanyByName(
-    parsed.data.empresa,
-    parsed.data.pais_detectado
-  ).catch(() => null);
+  const companyMatch = await findCompanyByName(parsed.data.empresa).catch(() => null);
 
   const { data, error } = await supabase
     .from("cases")
@@ -67,12 +71,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Error al crear el caso." }, { status: 500 });
   }
 
-  // Increment monthly usage counter for matched empresa (non-blocking)
+  // Increment monthly usage counter for matched empresa (non-blocking,
+  // but log failures since this drives billing).
   if (companyMatch) {
-    void supabase
-      .rpc("upsert_empresa_usage_period", {
-        p_company_id: companyMatch.companyId,
-        p_included_cases: 5,
+    supabase
+      .rpc("upsert_empresa_usage_period", { p_company_id: companyMatch.companyId })
+      .then(({ error: rpcError }) => {
+        if (rpcError) {
+          logError("upsert_empresa_usage_period failed", rpcError, {
+            companyId: companyMatch.companyId,
+            caseId: data?.id,
+          });
+        }
       });
   }
 

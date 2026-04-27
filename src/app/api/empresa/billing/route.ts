@@ -18,6 +18,7 @@ import {
 import { getCompanyForUser } from "@/lib/empresa";
 import { supabase } from "@/lib/supabase";
 import { logError, createRouteLogger } from "@/lib/logger";
+import { rateLimit } from "@/lib/rate-limit";
 
 const log = createRouteLogger("/api/empresa/billing");
 
@@ -49,6 +50,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Debes iniciar sesión primero." }, { status: 401 });
   }
 
+  const { allowed, resetIn } = await rateLimit(`empresa-billing-post:${userId}`, {
+    limit: 5,
+    windowSeconds: 60,
+  });
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Demasiadas solicitudes. Intenta de nuevo en ${resetIn} segundos.` },
+      { status: 429 }
+    );
+  }
+
   const company = await getCompanyForUser(userId);
   if (!company) {
     return NextResponse.json({ error: "No tienes una empresa registrada." }, { status: 403 });
@@ -75,6 +87,16 @@ export async function POST(request: NextRequest) {
 
   const planKey = parsed.data.plan;
   const config = PLAN_CONFIG[planKey];
+
+  if (!config.basePriceId || !config.overagePriceId) {
+    logError("Missing Stripe empresa price ID env vars", new Error("missing_price_id"), {
+      plan: planKey,
+    });
+    return NextResponse.json(
+      { error: "Plan no configurado. Contacta a soporte." },
+      { status: 500 }
+    );
+  }
 
   const user = await currentUser();
   const email = user?.emailAddresses[0]?.emailAddress ?? undefined;
