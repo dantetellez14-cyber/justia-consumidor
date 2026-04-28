@@ -296,7 +296,7 @@ function SeguimientoContent() {
     : null;
 
   return (
-    <div className="flex gap-12">
+    <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
       {/* Left column — timeline */}
       <div className="flex-1 min-w-0">
         {/* Case header */}
@@ -305,7 +305,7 @@ function SeguimientoContent() {
             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
             Caso #{caseData.id.slice(0, 8).toUpperCase()}
           </div>
-          <h2 className="text-3xl font-light text-white mb-2">
+          <h2 className="text-2xl sm:text-3xl font-light text-white mb-2">
             Seguimiento de Caso
           </h2>
           <p className="text-slate-400">
@@ -347,7 +347,7 @@ function SeguimientoContent() {
       </div>
 
       {/* Right column — metrics */}
-      <div className="w-[340px] shrink-0 flex flex-col gap-5">
+      <div className="w-full lg:w-[340px] shrink-0 flex flex-col gap-5">
         {/* Win probability */}
         {pct !== null && (
           <motion.div
@@ -499,8 +499,8 @@ function SeguimientoContent() {
 export default function SeguimientoPage() {
   return (
     <div className="flex min-h-screen bg-[#0f172a] text-slate-300 font-sans">
-      {/* Sidebar */}
-      <div className="w-20 bg-[#1e293b] border-r border-slate-800 flex flex-col items-center py-6 justify-between shrink-0">
+      {/* Sidebar — hidden on mobile */}
+      <div className="hidden sm:flex w-20 bg-[#1e293b] border-r border-slate-800 flex-col items-center py-6 justify-between shrink-0">
         <Link
           href="/"
           className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-500/20"
@@ -517,8 +517,8 @@ export default function SeguimientoPage() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-auto">
-        <header className="h-16 border-b border-slate-800 flex items-center px-8 bg-[#0f172a]/80 backdrop-blur-md sticky top-0 z-10">
+      <div className="flex-1 overflow-auto min-w-0">
+        <header className="h-14 sm:h-16 border-b border-slate-800 flex items-center px-4 sm:px-8 bg-[#0f172a]/80 backdrop-blur-md sticky top-0 z-10">
           <Link
             href="/mis-casos"
             className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
@@ -530,7 +530,7 @@ export default function SeguimientoPage() {
           <span className="text-slate-300 text-sm">Seguimiento</span>
         </header>
 
-        <main className="p-8 max-w-6xl mx-auto">
+        <main className="p-4 sm:p-8 max-w-6xl mx-auto">
           <Suspense fallback={<Skeleton />}>
             <SeguimientoContent />
           </Suspense>
