@@ -17,7 +17,7 @@ export function LoginPromptModal({ onClose }: LoginPromptModalProps) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl text-center"
+        className="w-full max-w-[90vw] sm:max-w-sm rounded-2xl bg-white p-6 sm:p-8 shadow-2xl text-center"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 shadow-lg">

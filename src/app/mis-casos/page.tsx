@@ -241,7 +241,7 @@ export default function MisCasosPage() {
                     </div>
 
                     {/* Right: metrics + expand toggle */}
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-6 sm:text-right">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6 sm:text-right">
                       {c.monto_reclamo != null && (
                         <div>
                           <p className="text-xs text-slate-400">Monto</p>

@@ -235,7 +235,7 @@ function RegistrationForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">
                 Email de contacto
@@ -853,7 +853,7 @@ function ComplaintDetail({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
           <div>
             <p className="text-xs text-slate-400">Producto/Servicio</p>
             <p className="font-medium text-slate-700">
@@ -1139,7 +1139,7 @@ export default function EmpresaPage() {
     <div className="flex min-h-screen flex-col bg-slate-50">
       {/* Header */}
       <header className="border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-3">
               <div className="rounded-xl bg-gradient-to-br from-emerald-600 to-teal-600 p-2.5">
@@ -1170,7 +1170,7 @@ export default function EmpresaPage() {
       </header>
 
       {/* Main content */}
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 sm:px-6 sm:py-8">
         {loading && (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />

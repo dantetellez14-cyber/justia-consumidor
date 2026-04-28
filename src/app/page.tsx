@@ -52,7 +52,7 @@ export default function Home() {
         onOpenFormula={() => setModalOpen(true)}
       />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4 sm:px-6 sm:py-8">
         {step === "analyze" && (
           <div>
             <ComplaintForm onSubmit={handleAnalyze} loading={loading} error={error} />
@@ -61,7 +61,7 @@ export default function Home() {
         )}
 
         {step === "results" && analysis && metrics && (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:gap-8 lg:grid-cols-5">
             <div className="lg:col-span-2">
               <ExtractedEntities analysis={analysis} />
               <motion.div

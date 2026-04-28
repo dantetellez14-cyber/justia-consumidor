@@ -45,7 +45,7 @@ export function WelcomeHero({ onStart }: Props) {
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: "#020617", backgroundImage: "radial-gradient(circle at 20% 20%, rgba(168,85,247,0.15) 0%, transparent 40%), radial-gradient(circle at 80% 80%, rgba(99,102,241,0.15) 0%, transparent 40%)" }}>
       {/* Header */}
       <header className="border-b border-white/10 backdrop-blur sticky top-0 z-50" style={{ backgroundColor: "rgba(2,6,23,0.8)" }}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
             <div className="rounded-xl p-2.5" style={{ background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)" }}>
               <Scale className="h-6 w-6 text-white" />
@@ -82,7 +82,7 @@ export function WelcomeHero({ onStart }: Props) {
       </header>
 
       <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-6 py-10 space-y-24 pb-20">
+        <div className="mx-auto max-w-6xl px-4 py-6 space-y-16 pb-16 sm:px-6 sm:py-10 sm:space-y-24 sm:pb-20">
 
           {/* ── Hero Card ── */}
           <div
@@ -175,11 +175,11 @@ export function WelcomeHero({ onStart }: Props) {
             <div className="text-center">
               <h3 className="text-xs font-black text-indigo-400 uppercase tracking-[0.2em]">LO QUE OFRECEMOS</h3>
             </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2">
               {features.map((f) => (
                 <div
                   key={f.title}
-                  className="flex gap-4 rounded-2xl border border-white/10 p-6"
+                  className="flex gap-3 sm:gap-4 rounded-2xl border border-white/10 p-4 sm:p-6"
                   style={{ background: "rgba(30,41,59,0.6)", backdropFilter: "blur(12px)" }}
                 >
                   <div
@@ -245,7 +245,7 @@ export function WelcomeHero({ onStart }: Props) {
 
       {/* Footer */}
       <footer className="border-t border-white/10 py-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-6 sm:flex-row sm:justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 sm:px-6 sm:flex-row sm:justify-between">
           <p className="text-xs text-slate-500">
             JustIA Consumidor &mdash; Cuando una empresa falla, tus derechos no deben fallar contigo.
           </p>

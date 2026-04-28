@@ -587,7 +587,7 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
             <button
               onClick={handleSendViaResend}
               disabled={sending || sendResult?.success === true}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-3 sm:py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
             >
               {sending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -605,7 +605,7 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
             <button
               onClick={handleSendCopyToMe}
               disabled={sendingCopy || copyResult?.success === true}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 sm:py-2.5 text-sm font-medium text-white shadow-md transition-shadow hover:shadow-lg disabled:opacity-50"
             >
               {sendingCopy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -638,21 +638,21 @@ export function ComplaintGenerator({ analysis, caseId, onNext }: Props) {
           </button>
           <button
             onClick={handleEmail}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Mail className="h-4 w-4" />
             Abrir en Email
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
             <Save className="h-4 w-4" />
             {saved ? "¡Copiado!" : "Copiar Texto"}
           </button>
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 sm:py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             title="Descargar como archivo de texto plano"
           >
             <FileText className="h-4 w-4" />
