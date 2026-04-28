@@ -17,11 +17,13 @@ import {
   Clock,
   CheckCircle2,
   Gavel,
+  Download,
 } from "lucide-react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/swr";
 import type { CaseWithResponses, CaseStatus, ConsumerResponseView } from "@/lib/supabase";
 import { MessageThread } from "@/components/message-thread";
+import { downloadCaseReportPdf } from "@/lib/pdf-report";
 
 // ── Timeline step config ──────────────────────────────────────────────────────
 
@@ -472,6 +474,13 @@ function SeguimientoContent() {
 
         {/* Actions */}
         <div className="flex flex-col gap-2">
+          <button
+            onClick={() => downloadCaseReportPdf(caseData)}
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors shadow-sm"
+          >
+            <Download size={14} />
+            Exportar reporte PDF
+          </button>
           <Link
             href="/mis-casos"
             className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
