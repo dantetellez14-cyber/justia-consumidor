@@ -1,7 +1,7 @@
 # JustIA Consumidor - Resumen Completo de Sesiones
 
 > Documento de referencia para continuar el desarrollo en una nueva sesion.
-> Ultima actualizacion: 8 de abril de 2026
+> Ultima actualizacion: 29 de abril de 2026
 
 ---
 
@@ -13,8 +13,9 @@
 2. Obtener un analisis legal automatizado con probabilidad de exito
 3. Generar un reclamo formal
 4. Enviarlo a la empresa
-5. Recibir respuestas de la empresa
+5. Recibir respuestas de la empresa (con dialogo bidireccional)
 6. Escalar ante organismos oficiales (PROFECO en Mexico, COPREC en Argentina)
+7. Exportar reporte PDF completo del caso
 
 ---
 
@@ -25,20 +26,25 @@
 | Framework | Next.js 16.2.2 | App Router, React 19.2.4 |
 | Lenguaje | TypeScript | Strict mode |
 | Auth | Clerk v7 | Dual role (consumer + empresa) |
-| Base de datos | Supabase PostgreSQL | service_role key bypass pattern |
+| Base de datos | Supabase PostgreSQL | RLS activo + service_role para servidor |
 | Cache servidor | Upstash Redis | TTL-based, in-memory fallback |
 | Cache cliente | SWR | stale-while-revalidate |
 | Rate limiting | Upstash Ratelimit | Sliding window, in-memory fallback |
 | Email | Resend | Transaccional, templates HTML |
-| IA | Google Gemini | @google/generative-ai |
+| IA | Google Gemini 2.0 Flash | @google/generative-ai |
 | Vector DB | Pinecone | Jurisprudencia embeddings |
+| Pagos | Stripe | Suscripciones empresa (Pro plan) |
 | Analytics | PostHog | Con cookie consent |
 | Errores | Sentry | @sentry/nextjs |
-| Estilos | Tailwind CSS | + Framer Motion animaciones |
+| Estilos | Tailwind CSS v4 | + Framer Motion |
+| 3D / Hero | Spline + Three.js | Welcome hero |
 | Iconos | Lucide React | |
 | Validacion | Zod v4 | .strict() en APIs |
 | Charts | Recharts | Financial metrics |
-| Testing | Vitest | 181 tests pasando |
+| PDF | Generacion server-side | Reporte de caso |
+| Testing unit | Vitest 4 | 23 archivos |
+| Testing E2E | Playwright + MSW | 3 flows (auth, consumer, empresa) |
+| PWA | Service worker | Cache version inyectado por git hash |
 
 ---
 
@@ -47,64 +53,104 @@
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Home - flujo principal consumidor
-│   ├── layout.tsx                  # Root layout (Clerk, PostHog, Sentry)
-│   ├── empresa/page.tsx            # Portal empresa (dashboard, respuestas)
-│   ├── mis-casos/page.tsx          # Lista de casos del consumidor
-│   ├── privacidad/page.tsx         # Politica de privacidad
-│   ├── terminos/page.tsx           # Terminos de uso
-│   ├── sign-in/[[...sign-in]]/     # Clerk sign-in
-│   ├── sign-up/[[...sign-up]]/     # Clerk sign-up
+│   ├── page.tsx                    # Home (refactor: split de 593 lineas en modulos)
+│   ├── layout.tsx                  # Root (Clerk, PostHog, Sentry, MSW)
+│   ├── error.tsx / global-error.tsx
+│   ├── not-found.tsx / loading.tsx
+│   ├── offline/                    # PWA offline page
+│   ├── opengraph-image.tsx / sitemap.ts / robots.ts
+│   ├── admin/                      # Panel admin (protegido a nivel proxy)
+│   ├── empresa/                    # Portal empresa (dashboard, billing, plan)
+│   ├── empresas/                   # Listado publico / brand matching
+│   ├── mis-casos/                  # Casos del consumidor
+│   ├── notificaciones/             # Centro de notificaciones in-app
+│   ├── pro/                        # Landing del plan Pro
+│   ├── privacidad/ terminos/
+│   ├── sign-in/ sign-up/           # Clerk
 │   └── api/
-│       ├── analyze/route.ts        # POST - Analisis IA del relato
-│       ├── cases/route.ts          # GET (lista) / POST (crear caso)
-│       ├── cases/[id]/route.ts     # GET / PATCH caso individual
-│       ├── complaint-stats/route.ts # GET - Estadisticas (cacheado 1h)
-│       ├── empresa/route.ts        # GET (dashboard) / POST (registrar) / PUT (vincular)
-│       ├── empresa/respond/route.ts # POST - Respuesta empresa a reclamo
-│       ├── feedback/route.ts       # POST - Feedback del usuario
-│       ├── search-jurisprudencia/   # GET - Busqueda legal (cacheado 24h)
-│       └── send-complaint/route.ts # POST - Enviar reclamo + notificar empresa
+│       ├── admin/                  # Endpoints admin
+│       ├── analyze/                # Analisis IA (Gemini 2.0 Flash)
+│       ├── arbitrate/              # Evaluacion arbitral IA
+│       ├── cases/                  # CRUD casos + responses anidadas
+│       ├── complaint-stats/        # Estadisticas (cache 1h)
+│       ├── cron/                   # Jobs programados
+│       ├── empresa/                # Portal empresa (GET/POST/PUT)
+│       ├── empresa/respond/        # Respuesta empresa a reclamo
+│       ├── empresas/               # Brand matching / listado
+│       ├── feedback/
+│       ├── jurisprudencia-fallback/
+│       ├── notifications/          # In-app notifications
+│       ├── search-jurisprudencia/  # Cache 24h
+│       ├── send-complaint/
+│       └── stripe/                 # Checkout + webhook
 ├── components/
-│   ├── arbitration-module.tsx      # Modulo de arbitraje IA
-│   ├── case-tracker.tsx            # Timeline visual del caso + respuestas empresa
-│   ├── company-response-card.tsx   # Tarjeta de respuesta empresa (consumer-facing)
-│   ├── complaint-form.tsx          # Formulario de relato
-│   ├── complaint-generator.tsx     # Generador de reclamo formal
-│   ├── complaint-stats-panel.tsx   # Panel de estadisticas (SWR)
-│   ├── cookie-consent-banner.tsx   # Banner GDPR cookies
-│   ├── escalation-module.tsx       # Modulo escalamiento PROFECO/COPREC
-│   ├── extracted-entities.tsx      # Entidades extraidas del relato
-│   ├── feedback-rating.tsx         # Rating del usuario
-│   ├── financial-chart.tsx         # Grafico financiero
-│   ├── footer-metrics.tsx          # Metricas del footer
-│   ├── formula-modal.tsx           # Modal de formula
-│   ├── jurisprudencia-list.tsx     # Lista de jurisprudencia
-│   ├── loading-animation.tsx       # Animacion de carga
-│   ├── posthog-provider.tsx        # Provider PostHog + cookie consent
-│   ├── recommendation-alert.tsx    # Alerta de recomendacion
-│   ├── reputation-score-badge.tsx  # Badge de reputacion empresa
-│   └── welcome-hero.tsx            # Hero section
+│   ├── app-header.tsx
+│   ├── arbitration-module.tsx
+│   ├── case-tracker.tsx
+│   ├── company-response-card.tsx
+│   ├── complaint-form.tsx / complaint-form-data.ts
+│   ├── complaint-generator.tsx
+│   ├── complaint-stats-panel.tsx
+│   ├── cookie-consent-banner.tsx
+│   ├── escalation-module.tsx
+│   ├── extracted-entities.tsx
+│   ├── feedback-rating.tsx
+│   ├── financial-chart.tsx
+│   ├── footer-metrics.tsx
+│   ├── formula-modal.tsx
+│   ├── jurisprudencia-list.tsx
+│   ├── loading-animation.tsx
+│   ├── login-prompt-modal.tsx
+│   ├── message-thread.tsx          # Chat bidireccional consumidor ↔ empresa
+│   ├── msw-provider.tsx            # Mock Service Worker (E2E)
+│   ├── notification-bell.tsx
+│   ├── posthog-provider.tsx
+│   ├── pwa-register.tsx
+│   ├── recommendation-alert.tsx
+│   ├── reputation-score-badge.tsx
+│   ├── ui/                         # Primitivos
+│   └── welcome-hero.tsx
 ├── lib/
-│   ├── cache.ts                    # Redis + in-memory cache
-│   ├── complaint-stats.ts          # Logica de estadisticas
-│   ├── empresa.ts                  # Servicio empresa (CRUD, auto-deteccion)
-│   ├── escalation.ts               # Logica de escalamiento
-│   ├── jurisprudencia.ts           # Busqueda jurisprudencia
-│   ├── logger.ts                   # Logger (Pino)
-│   ├── notifications.ts           # Emails bidireccionales
-│   ├── pinecone.ts                # Cliente Pinecone
-│   ├── posthog.ts                 # PostHog con consent
-│   ├── rate-limit.ts              # Rate limiting Upstash
-│   ├── reputation-score.ts        # Calculo reputacion
-│   ├── scoring.ts                 # Scoring de casos
-│   ├── supabase.ts                # Cliente Supabase + tipos
-│   ├── swr.ts                     # SWR fetchers
-│   ├── types.ts                   # CaseAnalysis, FinancialMetrics, etc.
-│   ├── validations.ts             # Schemas Zod
-│   └── email/
-│       └── templates.ts           # Templates HTML email
-└── __tests__/                     # 16 archivos, 181 tests
+│   ├── cache.ts
+│   ├── cases-client.ts / cases-utils.ts
+│   ├── complaint-document.ts
+│   ├── complaint-stats.ts
+│   ├── email/                      # Templates HTML
+│   ├── empresa.ts / empresa-matcher.ts
+│   ├── escalation.ts
+│   ├── jurisprudencia.ts
+│   ├── logger.ts                   # Pino
+│   ├── msw-init.ts
+│   ├── notifications.ts
+│   ├── pdf-report.ts               # Export PDF de caso
+│   ├── pinecone.ts
+│   ├── posthog.ts
+│   ├── providers/
+│   ├── rate-limit.ts
+│   ├── reputation-score.ts
+│   ├── scoring.ts
+│   ├── stripe.ts                   # Cliente Stripe + helpers
+│   ├── supabase.ts
+│   ├── swr.ts
+│   ├── track-tokens.ts             # Tracking de uso de IA
+│   ├── types.ts
+│   ├── utils.ts
+│   └── validations.ts
+└── __tests__/                      # Vitest
+    ├── api/
+    │   ├── analyze.test.ts
+    │   ├── cases.test.ts
+    │   ├── empresa-respond.test.ts
+    │   ├── feedback.test.ts
+    │   ├── search-jurisprudencia.test.ts
+    │   └── send-complaint.test.ts
+    ├── scripts/                    # Tests de pipeline jurisprudencia
+    │   ├── jurisprudencia-io.test.ts
+    │   ├── normalize-prompt.test.ts
+    │   ├── scraper-ar-boletin.test.ts
+    │   ├── scraper-ar-saij.test.ts
+    │   ├── scraper-mx-sjf2.test.ts
+    │   └── seed-incremental.test.ts
     ├── cache.test.ts
     ├── company-response-card.test.ts
     ├── email-templates.test.ts
@@ -115,13 +161,35 @@ src/
     ├── rate-limit.test.ts
     ├── reputation-score.test.ts
     ├── scoring.test.ts
-    ├── validations.test.ts
-    └── api/
-        ├── analyze.test.ts
-        ├── cases.test.ts
-        ├── feedback.test.ts
-        ├── search-jurisprudencia.test.ts
-        └── send-complaint.test.ts
+    └── validations.test.ts
+
+e2e/                                # Playwright
+├── flows/
+│   ├── auth-flow.spec.ts
+│   ├── consumer-flow.spec.ts
+│   └── empresa-flow.spec.ts
+├── fixtures/ mocks/ global-setup.ts
+
+scripts/
+├── inject-sw-version.js            # PWA cache version (prebuild)
+├── generate-pwa-icons.mjs
+├── scrape-jurisprudencia.ts        # Pipeline: scrape → normalize → seed
+├── normalize-jurisprudencia.ts
+├── seed-pinecone.ts
+├── scrape-scjn-bulk.ts / run-ar-sanciones.ts / run-ingest-local.ts
+├── migrate-json-to-supabase.ts
+├── verify-existing-companies.ts
+└── lib/ python/ fleet/
+
+supabase/migrations/                # Migraciones SQL versionadas
+├── 20260408_empresa_verification.sql
+├── 20260409_rls_policies.sql
+├── 20260416_jurisprudencia_cases.sql
+├── 20260417_consumer_responses.sql
+├── 20260417_notifications.sql
+├── 20260424_user_analytics.sql
+├── 20260427_empresa_billing.sql
+└── 20260427_empresa_billing_hardening.sql
 ```
 
 ---
@@ -131,97 +199,115 @@ src/
 | Tabla | Proposito |
 |-------|----------|
 | `cases` | Casos de reclamo (user_id, relato, empresa, status, analisis) |
-| `company_accounts` | Cuentas de empresa registradas (nombre, RFC/CUIT, email_contacto) |
-| `company_users` | Vinculo usuario Clerk ↔ empresa (rol: admin/operador/lectura) |
-| `company_responses` | Respuestas de empresa a casos (tipo, mensaje, monto propuesto) |
-| `feedback` | Feedback de usuarios sobre el servicio |
+| `company_accounts` | Cuentas empresa (con billing, plan, stripe_customer_id) |
+| `company_users` | Vinculo Clerk ↔ empresa (rol: admin/operador/lectura) |
+| `company_responses` | Respuestas de empresa a casos |
+| `consumer_responses` | Respuestas del consumidor (dialogo bidireccional) |
+| `feedback` | Feedback de usuarios |
+| `notifications` | Notificaciones in-app |
+| `jurisprudencia_cases` | Casos de jurisprudencia normalizados |
+| `user_analytics` | Tracking de uso |
 
-### Tipos de respuesta empresa (`company_responses.tipo_respuesta`):
-- `aceptar` - Acepta el reclamo (caso pasa a "resuelto")
-- `rechazar` - Rechaza el reclamo (caso pasa a "en_mediacion")
-- `propuesta` - Propone resolucion con monto (caso pasa a "en_mediacion")
-- `solicitar_info` - Solicita mas informacion (caso pasa a "en_mediacion")
+### Tipos de respuesta empresa (`company_responses.tipo_respuesta`)
+- `aceptar` — caso pasa a "resuelto"
+- `rechazar` — caso pasa a "en_mediacion"
+- `propuesta` — propuesta con monto, caso a "en_mediacion"
+- `solicitar_info` — solicita informacion adicional
 
-### Estados de caso (`cases.status`):
-1. `consulta_recibida` - Caso analizado por IA
-2. `reclamo_generado` - Reclamo formal creado
-3. `enviado_empresa` - Enviado a la empresa
-4. `en_mediacion` - En proceso de mediacion
-5. `resuelto` - Caso resuelto
+### Estados de caso (`cases.status`)
+1. `consulta_recibida`
+2. `reclamo_generado`
+3. `enviado_empresa`
+4. `en_mediacion`
+5. `resuelto`
+
+### RLS
+Activado via migracion `20260409_rls_policies.sql`. El servidor sigue usando `SUPABASE_SECRET_KEY` (service_role) en API routes, pero RLS protege accesos directos con anon key como capa de defensa adicional.
 
 ---
 
 ## 5. Funcionalidades Completadas
 
 ### 5.1 Flujo Principal del Consumidor
-- Relato en lenguaje natural → analisis IA (Gemini)
+- Relato en lenguaje natural → analisis IA (Gemini 2.0 Flash)
 - Extraccion de entidades (empresa, producto, monto, fecha)
-- Calculo de probabilidad de exito
-- Analisis legal por pais (AR/MX)
+- Calculo de probabilidad de exito y analisis legal por pais (AR/MX)
 - Busqueda de jurisprudencia con Pinecone
-- Generacion de reclamo formal (carta)
-- Envio por email con Resend
-- Evaluacion arbitral IA
+- Generacion de reclamo formal y envio por email (Resend)
+- Evaluacion arbitral IA (`/api/arbitrate`)
 - Generacion de documento de escalamiento (PROFECO/COPREC)
 - Timeline visual del caso (CaseTracker)
-- Rating y feedback del usuario
+- Rating y feedback
+- **Exportar reporte PDF completo del caso** desde la pagina de seguimiento
 
 ### 5.2 Portal Empresa
-- Auto-deteccion de empresa por dominio de email (e.g., @telmex.com.mx → Telmex)
-- Filtro de proveedores genericos (gmail, hotmail, outlook, etc.)
-- Registro de nueva empresa (nombre, RFC/CUIT, sector, contacto)
-- Vinculacion a empresa existente (claim)
+- Auto-deteccion por dominio de email (filtro de proveedores genericos)
+- Registro / vinculacion (claim) de empresa existente
 - Dashboard con estadisticas (casos pendientes, resueltos, tiempo promedio)
-- Lista de reclamos recibidos con filtros
+- Brand matching para identificar la empresa correcta
 - Sistema de respuesta a reclamos (4 tipos)
 - Historial de respuestas previas por caso
+- **Billing con Stripe**: plan dashboard, suscripcion al plan Pro
+- Webhook Stripe + hardening contra abuso
 
-### 5.3 Notificaciones Email Bidireccionales
-- **Consumidor → Empresa**: Al enviar reclamo, se notifica a la empresa (email_contacto de company_accounts)
-- **Empresa → Consumidor**: Al responder la empresa, se notifica al consumidor (email via Clerk API)
-- Templates HTML con branding, color-coded por tipo de respuesta
-- Patron fire-and-forget (async, no-blocking, errores logueados pero no lanzados)
-- Links directos al portal correspondiente (CTA buttons)
+### 5.3 Notificaciones (Email + In-App)
+- **Email bidireccional** (Resend, fire-and-forget):
+  - Consumidor → Empresa al enviar reclamo
+  - Empresa → Consumidor al responder
+  - Templates HTML color-coded
+- **Notificaciones in-app**:
+  - Tabla `notifications`, endpoint `/api/notifications`
+  - Componente `notification-bell` con badge
+  - Pagina `/notificaciones` con feed completo
 
-### 5.4 Visibilidad de Respuestas para el Consumidor
-- API `/api/cases` ahora incluye `company_responses` via Supabase join
-- Tipo `CaseWithResponses` extiende `CaseRecord` con array de respuestas
-- Tipo `CompanyResponseView` (consumer-facing, sin IDs internos de empresa)
-- Componente `CompanyResponseCard` con badges color-coded por tipo
-- Componente `ResponseIndicator` (badge compacto para lista de casos)
-- `/mis-casos` muestra indicador de respuestas en cada tarjeta
-- Tarjetas expandibles con click para ver detalle de respuestas (AnimatePresence)
-- `CaseTracker` actualizado:
-  - Timeline refleja cuando empresa responde (paso "Enviado" = completado)
-  - Seccion "Respuestas de [empresa]" con tarjetas detalladas
-  - "Resolucion" se marca completado cuando empresa acepta
-  - Badge superior cambia a "Resuelto" (verde) en aceptacion
-  - Proximo paso sugerido contextual segun tipo de respuesta
+### 5.4 Visibilidad y Dialogo Bidireccional
+- API `/api/cases` incluye `company_responses` y `consumer_responses` via Supabase join
+- Componente `CompanyResponseCard` con badges color-coded
+- Componente `MessageThread` para chat bidireccional consumidor ↔ empresa
+- `CaseTracker` refleja respuestas y resoluciones en timeline
+- `/mis-casos` con indicador de respuestas, tarjetas expandibles
 
-### 5.5 Seguridad Implementada
-- **Caching**: Redis server-side (Upstash) + Cache-Control headers + SWR client-side
-  - complaint-stats: 1h TTL
-  - jurisprudencia: 24h TTL
-  - cases list: 30s max-age + 60s stale-while-revalidate
-- **Rate Limiting**: Todos los endpoints protegidos (20-30 req/min por IP)
-  - Upstash sliding window en produccion
-  - In-memory fallback en desarrollo
-- **Validacion de entrada**: Zod `.strict()` en endpoints (rechaza campos desconocidos)
-- **Sin API keys en codigo**: Todas via env vars
-- **Cookie Compliance**: Banner de consentimiento, PostHog solo se inicializa con consentimiento
-  - localStorage key: `justia_cookie_consent`
-  - Opciones: "Aceptar todas" vs "Solo esenciales"
-- **Auth**: Clerk middleware protege rutas privadas
+### 5.5 Seguridad
+- **Caching multi-capa**: Redis + Cache-Control + SWR
+- **Rate limiting**: Upstash sliding window en todos los endpoints
+- **Validacion Zod** `.strict()`
+- **RLS Supabase activo** (migracion 20260409)
+- **Auth guards** en API routes (Clerk)
+- **Anti ilike-injection** en busquedas
+- **Proteccion `/admin` a nivel proxy** (redirect non-admin)
+- **503 explicito** en errores de quota/auth (sin fallback demo silencioso)
+- **Cookie consent**: PostHog solo se inicializa con consentimiento
+- **Sin secretos en codigo**: env vars
 
-### 5.6 Performance
-- Redis caching multi-capa
-- SWR con deduplication intervals
-- Cache-Control headers para CDN
-- In-memory fallbacks para desarrollo local
+### 5.6 PWA
+- Service worker con cache version auto-inyectada por git hash en `prebuild`
+- `pwa-register.tsx` para registro
+- Pagina `/offline`
+- Manifest e iconos generados (`generate-pwa-icons.mjs`)
+- Network-first para HTML (evita blank pages por cache stale)
+
+### 5.7 Mobile / Responsive
+- Audit completo de breakpoints, tap targets, overflow
+- Sidebar oculto en mobile en seguimiento, layout flex-col
+- Optimizaciones para pantallas <390px
+
+### 5.8 Pipeline de Jurisprudencia
+- Scrapers para SAIJ (AR), Boletin Oficial (AR), SJF2 (MX), SCJN bulk
+- Normalizacion con prompt LLM
+- Seed incremental a Pinecone
+- Tabla `jurisprudencia_cases` en Supabase
+- Comando: `npm run pipeline:jurisprudencia`
+
+### 5.9 Testing
+- **Unit (Vitest)**: 23 archivos cubriendo lib, API routes, components, scripts
+- **E2E (Playwright + MSW)**: 3 flows (auth, consumer, empresa)
+- `test:e2e` script + `global-setup.ts`
 
 ---
 
 ## 6. Variables de Entorno Necesarias
+
+> No commitear valores reales. Mantener un `.env.example` con placeholders.
 
 ```env
 # Supabase
@@ -248,6 +334,12 @@ UPSTASH_REDIS_REST_TOKEN=
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 
+# Stripe (Billing empresa)
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_PRICE_ID_PRO=
+
 # PostHog Analytics
 NEXT_PUBLIC_POSTHOG_KEY=
 NEXT_PUBLIC_POSTHOG_HOST=
@@ -256,178 +348,139 @@ NEXT_PUBLIC_POSTHOG_HOST=
 SENTRY_DSN=
 NEXT_PUBLIC_SENTRY_DSN=
 
+# Admin (proxy guard)
+ADMIN_USER_IDS=
+
 # App
 NEXT_PUBLIC_APP_URL=
 
-# MCP Servers (Claude Code dev tools)
-FIRECRAWL_API_KEY=fc-41b40d3408364df5a277be3eebb19811
+# Dev tools (NUNCA commitear valores reales)
+FIRECRAWL_API_KEY=
 ```
 
 ---
 
 ## 7. Pendientes por Prioridad
 
-### CRITICO - Funcionalidad Core
+### ALTO
 
-#### 7.1 Migracion de IA: Ollama → API Cloud (GPT-4o/Claude)
-- **Estado**: La app usa Google Gemini (@google/generative-ai)
-- **Problema**: Depende de una sola API key, sin fallback
-- **Accion**: Evaluar si agregar fallback a otro proveedor (Claude API, GPT-4o)
-- **Archivos**: `src/app/api/analyze/route.ts`, `src/lib/types.ts`
+#### 7.1 Verificacion de Empresa (claim)
+- **Estado**: existe migracion `20260408_empresa_verification.sql` y script `verify-existing-companies.ts`
+- **Pendiente**: completar UX de verificacion (codigo invitacion / email corporativo / validacion manual) end-to-end y gating del portal hasta verificacion
+- **Archivos**: `src/app/api/empresa/route.ts`, `src/lib/empresa.ts`, `src/app/empresa/page.tsx`
 
-#### 7.2 Verificacion de Empresa
-- **Estado**: Cualquier usuario puede registrarse como cualquier empresa
-- **Problema**: No hay verificacion de que el usuario realmente pertenece a la empresa
-- **Accion**: Implementar verificacion por email corporativo, codigo de invitacion, o validacion manual
-- **Archivos**: `src/app/api/empresa/route.ts`, `src/lib/empresa.ts`
+#### 7.2 Dominio DNS + Verificacion Resend
+- **Estado**: emails funcionan pero desde dominio no verificado
+- **Accion**: configurar SPF/DKIM/DMARC en dominio propio en Resend
 
-### ALTO - Experiencia Completa
+#### 7.3 Expansion de Jurisprudencia
+- **Estado**: pipeline operativo (scrapers + normalize + seed)
+- **Accion**: correr pipeline completo y poblar Pinecone con 500+ casos reales
 
-#### 7.3 Dominio DNS + Verificacion Resend
-- **Estado**: Emails se envian desde dominio no verificado
-- **Problema**: Emails pueden caer en spam
-- **Accion**: Configurar dominio propio en Resend, agregar registros DNS (SPF, DKIM, DMARC)
-- **Archivos**: Configuracion en dashboard de Resend
+### MEDIO
 
-#### 7.4 Expansion de Jurisprudencia
-- **Estado**: Solo ~10 casos de prueba
-- **Accion**: Expandir a 100+ casos reales de PROFECO y COPREC
-- **Archivos**: `src/lib/jurisprudencia.ts`, Pinecone index
+#### 7.4 Cobertura E2E
+- **Estado**: 3 flows base (auth, consumer, empresa)
+- **Accion**: agregar flows para billing Stripe, notificaciones, dialogo bidireccional, export PDF, escalamiento
 
-#### 7.5 Row Level Security (RLS) en Supabase
-- **Estado**: No implementado, se usa service_role key que bypassa RLS
-- **Problema**: Si alguien obtiene el anon key, podria leer/escribir todo
-- **Accion**: Configurar politicas RLS como capa de defensa adicional
-- **Archivos**: Supabase dashboard, SQL migrations
+#### 7.5 Pen Test
+- Correr OWASP ZAP / equivalente
+- Foco: XSS, CSRF, SSRF, IDOR en `/api/cases/[id]` y `/api/empresa/respond`
 
-### MEDIO - Calidad y Testing
+#### 7.6 Fallback de IA
+- **Estado**: solo Gemini 2.0 Flash; ya hay manejo de 503 ante quota errors
+- **Accion**: agregar fallback a Claude o GPT-4o ante quota / outage
 
-#### 7.6 E2E Tests con Playwright
-- **Estado**: Solo tests unitarios (Vitest, 181 tests)
-- **Accion**: Agregar E2E tests para flujos criticos:
-  - Consumidor: relato → analisis → reclamo → envio
-  - Empresa: login → dashboard → respuesta
-  - Notificaciones: verificar emails enviados
-- **Herramientas**: Playwright MCP server ya instalado
+### BAJO
 
-#### 7.7 Pen Test con OWASP ZAP
-- **Estado**: No realizado
-- **Accion**: Correr OWASP ZAP o herramienta similar
-- **Foco**: SQL injection (ya mitigado con Supabase parameterized), XSS, CSRF, SSRF
+#### 7.7 Panel Admin completo
+- Existe `/admin` protegido. Falta poblar con metricas globales, moderacion, gestion de usuarios/empresas
 
-### BAJO - Mejoras Futuras
+#### 7.8 Accesibilidad (a11y)
+- Audit Lighthouse, ARIA labels, keyboard nav, screen reader
 
-#### 7.8 Panel de Administracion
-- Dashboard admin para gestionar empresas, usuarios, casos
-- Metricas globales de la plataforma
-- Moderacion de contenido
+#### 7.9 GDPR - Derecho a eliminacion
+- Endpoint para borrado en cascada (cases, feedback, responses, notifications)
 
-#### 7.9 Monetizacion
-- Plan de precios para empresas
-- Modelo freemium para consumidores
-- Integracion con Stripe
+#### 7.10 Push Notifications PWA
+- Service worker ya existe; falta canal de push real
 
-#### 7.10 Accesibilidad (a11y)
-- Audit con Lighthouse
-- ARIA labels
-- Keyboard navigation
-- Screen reader support
-
-#### 7.11 GDPR - Derecho a Eliminacion
-- Endpoint para que usuarios soliciten borrar sus datos
-- Eliminacion en cascada (cases, feedback, company_responses)
-
-#### 7.12 PWA (Progressive Web App)
-- Service worker
-- Manifest
-- Offline support basico
-- Push notifications
-
-#### 7.13 Respuesta del Consumidor a la Empresa
-- Actualmente el flujo es unidireccional post-respuesta empresa
-- Agregar posibilidad de que el consumidor responda a propuestas
-- Chat-like flow entre consumidor y empresa dentro de la plataforma
+#### 7.11 Monetizacion - tier consumidor
+- Stripe ya integrado para empresas. Evaluar freemium consumidor
 
 ---
 
-## 8. Archivos Clave para Continuar
-
-### Para trabajar en verificacion de empresa:
-```
-src/lib/empresa.ts          # extractCompanyFromEmail, findCompanyByEmailDomain
-src/app/api/empresa/route.ts # GET (auto-deteccion), POST (registro), PUT (vincular)
-src/app/empresa/page.tsx     # Portal completo de empresa
-```
-
-### Para trabajar en E2E tests:
-```
-src/app/page.tsx            # Flujo principal consumidor
-src/app/empresa/page.tsx    # Flujo empresa
-src/app/mis-casos/page.tsx  # Lista de casos
-```
-
-### Para trabajar en RLS:
-```
-src/lib/supabase.ts         # supabase (service_role) vs supabasePublic (anon)
-```
-
-### Para trabajar en expansion de jurisprudencia:
-```
-src/lib/jurisprudencia.ts   # Logica de busqueda
-src/lib/pinecone.ts         # Cliente Pinecone
-src/app/api/search-jurisprudencia/route.ts
-```
-
----
-
-## 9. Comandos Utiles
+## 8. Comandos Utiles
 
 ```bash
 # Desarrollo
-npm run dev                    # Servidor de desarrollo
+npm run dev
 
 # Tests
-npx vitest run                 # Correr todos los tests (181)
-npx vitest run src/__tests__/cache.test.ts  # Test individual
-npx tsc --noEmit               # Type check sin compilar
+npm test                              # Vitest (unit)
+npm run test:watch
+npm run test:coverage
+npm run test:e2e                      # Playwright
 
-# Lint
-npx next lint                  # ESLint
+# Type / Lint
+npx tsc --noEmit
+npm run lint
 
 # Build
-npm run build                  # Build de produccion
+npm run build                         # incluye prebuild (inject-sw-version)
+
+# Pipeline jurisprudencia
+npm run scrape:jurisprudencia
+npm run normalize:jurisprudencia
+npm run seed:jurisprudencia
+npm run pipeline:jurisprudencia
+
+# Supabase
+npm run db:push
+npm run db:new <nombre>
+npm run migrate:json
 ```
 
 ---
 
-## 10. MCP Servers Configurados
+## 9. MCP Servers Configurados
 
-En `~/.claude.json`:
-- **Firecrawl**: Web scraping (API key: fc-41b40d3408364df5a277be3eebb19811)
-- **Playwright**: E2E browser automation (@playwright/mcp)
-- **Supabase**: Database management MCP
+En `~/.claude.json` (no commitear keys):
+- **Firecrawl**: web scraping
+- **Playwright**: E2E browser automation
+- **Supabase**: database management
 
 ---
 
-## 11. Notas Tecnicas Importantes
+## 10. Notas Tecnicas Importantes
 
-1. **Patron service_role**: Supabase se accede con `SUPABASE_SECRET_KEY` (bypasa RLS). La autorizacion se maneja en cada API route con Clerk. Esto es intencional pero deberia tener RLS como capa adicional.
+1. **service_role + RLS coexisten**: el servidor usa `SUPABASE_SECRET_KEY` y autoriza con Clerk en cada API route. RLS (migracion `20260409`) protege accesos directos con anon key como capa de defensa adicional.
 
-2. **Fire-and-forget notifications**: Las notificaciones email NUNCA bloquean el flujo principal. Errores se loguean pero no se lanzan. Patron:
+2. **Fire-and-forget notifications**: emails y notificaciones in-app NUNCA bloquean el flujo. Errores se loguean.
    ```typescript
    notifyEmpresaNewComplaint(params).catch(() => {});
    ```
 
-3. **SWR pattern**: Reemplazo de useEffect/useState/fetchData con useSWR + mutate(). Las paginas `/mis-casos` y `/empresa` usan este patron.
+3. **SWR pattern** en `/mis-casos`, `/empresa`, `/notificaciones`.
 
-4. **Auto-deteccion empresa**: Extrae dominio del email Clerk, filtra proveedores genericos (gmail, hotmail, etc.), busca en `company_accounts.nombre_normalizado` y luego en `cases.empresa`.
+4. **Auto-deteccion empresa**: extrae dominio del email, filtra genericos (gmail, hotmail, etc.), busca en `company_accounts.nombre_normalizado` y luego en `cases.empresa`.
 
-5. **Cookie consent**: PostHog NO se inicializa hasta que el usuario da consentimiento explicito. El banner aparece con delay de 1.5s con animacion Framer Motion.
+5. **Cookie consent**: PostHog NO se inicializa hasta consentimiento explicito (localStorage `justia_cookie_consent`). Banner con delay 1.5s + Framer Motion.
 
-6. **Tipos consumer-facing vs internos**: `CompanyResponseView` (consumer) omite `company_id` y `respondido_por`. `CompanyResponse` (empresa) incluye todo.
+6. **Tipos consumer-facing vs internos**: `CompanyResponseView` (consumer) omite IDs internos. `CompanyResponse` (empresa) incluye todo.
 
 7. **Cache layers**:
-   - L1: SWR en cliente (30-60s dedup)
+   - L1: SWR cliente (30-60s dedup)
    - L2: Cache-Control headers (CDN)
    - L3: Redis server (1h-24h TTL)
-   - Fallback: In-memory Map (dev, max 500 entries)
+   - Fallback: in-memory Map (dev, max 500 entries)
+
+8. **PWA cache invalidation**: el script `prebuild` (`inject-sw-version.js`) inyecta el git hash actual como version del service worker, evitando blank pages por cache stale. HTML usa estrategia network-first.
+
+9. **Refactor `page.tsx`**: la home estaba en 593 lineas; se dividio en modulos focalizados.
+
+10. **503 explicito**: ante errores de quota o auth de Gemini, la app devuelve 503 en lugar de fallback silencioso a demo.
+
+11. **`/admin` proxy guard**: la proteccion ocurre antes del routing de Next, redirect a non-admin.
+
+12. **MSW en producto**: usado para E2E con Playwright; el `msw-provider.tsx` se monta condicionalmente.
