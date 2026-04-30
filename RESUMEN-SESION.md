@@ -1,7 +1,22 @@
 # JustIA Consumidor - Resumen Completo de Sesiones
 
 > Documento de referencia para continuar el desarrollo en una nueva sesion.
-> Ultima actualizacion: 29 de abril de 2026
+> Ultima actualizacion: 29 de abril de 2026 (rev 2 — incluye app mobile y QA completo)
+
+---
+
+## 0. Estado del Producto (vista rapida)
+
+JustIA tiene **dos apps** que comparten el mismo backend:
+
+| App | Repo | Stack | Estado | Deploy |
+|---|---|---|---|---|
+| Web | `justia-consumidor` (este repo) | Next.js 16 + React 19 + PWA | Production-ready, CI rojo a fixear | `justia-consumidor.vercel.app` |
+| Mobile | `justia-mobile` (local: `~/justia-mobile`, sin remote aun) | Expo SDK 54 + React Native 0.81 + Expo Router 6 | MVP temprano (~1700 LOC, 2 commits) | iOS dev build local, sin Android, sin EAS |
+
+**Backend compartido**: Supabase + Clerk + Pinecone + Stripe + Resend + Gemini + Upstash (todo via API routes de Next.js).
+
+**Sin dominio propio aun** — corre todo sobre `*.vercel.app`. Ver seccion 12.
 
 ---
 
@@ -362,6 +377,9 @@ FIRECRAWL_API_KEY=
 
 ## 7. Pendientes por Prioridad
 
+> **Roadmap detallado y vista por app**: ver seccion 11 (Mobile) y seccion 13 (Roadmap consolidado).
+> **Hallazgos criticos QA actuales**: ver seccion 12.
+
 ### ALTO
 
 #### 7.1 Verificacion de Empresa (claim)
@@ -484,3 +502,255 @@ En `~/.claude.json` (no commitear keys):
 11. **`/admin` proxy guard**: la proteccion ocurre antes del routing de Next, redirect a non-admin.
 
 12. **MSW en producto**: usado para E2E con Playwright; el `msw-provider.tsx` se monta condicionalmente.
+
+---
+
+## 11. App Mobile (`justia-mobile`)
+
+> Repo local en `~/justia-mobile`. **Aun sin remote en GitHub**. Comparte backend con web (apunta a `https://justia-consumidor.vercel.app`).
+
+### 11.1 Stack
+
+| Capa | Tecnologia |
+|---|---|
+| Runtime | Expo SDK 54 + React Native 0.81 + React 19 |
+| Routing | Expo Router 6 (typed routes activado) |
+| Auth | `@clerk/clerk-expo` + `expo-secure-store` (session cache) |
+| DB client | `@supabase/supabase-js` con AsyncStorage |
+| Estilos | NativeWind 4 + Tailwind 3.4 (mismas clases que web) |
+| Iconos | `lucide-react-native` |
+| Animacion | `react-native-reanimated` 4 + worklets |
+| Storage | `@react-native-async-storage/async-storage` |
+| Navegacion nativa | `react-native-screens`, `safe-area-context` |
+| Web fallback | `react-native-web` (corre en navegador para dev rapido) |
+
+### 11.2 Estructura
+
+```
+justia-mobile/
+├── app/
+│   ├── _layout.tsx              # ClerkProvider + theme root
+│   ├── index.tsx                # Entry / redirect
+│   ├── modal.tsx
+│   ├── +html.tsx / +not-found.tsx
+│   ├── (tabs)/
+│   │   ├── _layout.tsx
+│   │   ├── index.tsx            # Landing
+│   │   ├── analyze.tsx          # Formulario analisis IA
+│   │   ├── casos.tsx            # Lista de casos
+│   │   └── two.tsx              # Placeholder template
+│   └── caso/[id].tsx            # Detalle de caso
+├── components/                   # En su mayoria template Expo
+├── lib/
+│   ├── api.ts                   # Cliente fetch al backend Next.js
+│   ├── cache.ts
+│   ├── supabase.ts              # Cliente Supabase RN
+│   └── types.ts                 # AnalysisResult, Case (compartido con web)
+├── ios/                         # Development build (compilado)
+├── android/                     # NO existe aun
+├── app.json                     # bundleIdentifier: com.anonymous.justia-mobile (placeholder)
+└── .env                         # !!! contiene secretos server-side a limpiar
+```
+
+### 11.3 Variables de entorno mobile (`.env`)
+
+> **Solo deben existir vars con prefijo `EXPO_PUBLIC_`**. Cualquier secreto sin ese prefijo igual se compila en el bundle.
+
+```env
+EXPO_PUBLIC_API_URL=https://justia-consumidor.vercel.app
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=
+EXPO_PUBLIC_POSTHOG_KEY=
+EXPO_PUBLIC_POSTHOG_HOST=
+EXPO_PUBLIC_SENTRY_DSN=
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+```
+
+**NO debe existir en el .env de mobile** (estas son del web/server, ver hallazgo critico en seccion 12):
+`SUPABASE_SECRET_KEY`, `CLERK_SECRET_KEY`, `GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `PINECONE_API_KEY`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`.
+
+### 11.4 Lo que esta hecho
+
+- Setup Expo + Expo Router + NativeWind funcional
+- Clerk auth con session cache nativo (`expo-secure-store`)
+- Supabase client con persistencia (AsyncStorage)
+- `lib/api.ts` conectado a `/api/analyze` y `/api/cases` del backend
+- iOS development build compilado (tras fix de CocoaPods + ExpoCryptoAES)
+- Pantallas: landing, analyze, casos, detalle
+
+### 11.5 Lo que falta (paridad con web)
+
+| Feature | Existe en web | Esfuerzo mobile | Prioridad |
+|---|---|---|---|
+| Resultado de analisis IA en pantalla (no `alert()`) | si | 1-2 dias | P1 |
+| Generacion + envio de reclamo formal | si | 3-4 dias | P1 |
+| Timeline visual del caso (CaseTracker) | si | 3-4 dias | P1 |
+| Dialogo bidireccional (`MessageThread`) | si | 3 dias | P1 |
+| Notificaciones in-app (bell + feed) | si | 2 dias | P1 |
+| Push notifications nativas (`expo-notifications`) | N/A | 4-5 dias | P1 |
+| Sign in with Apple nativo | parcial | 1 dia | P1 |
+| Sentry RN init + ErrorBoundary global | env existe | 1 dia | P1 |
+| Timeout/retry en `lib/api.ts` (AbortController) | N/A | 2 horas | P1 |
+| Build Android funcional | no | 1 dia | P1 |
+| EAS Build + EAS Submit configurado | no | 2 dias | P1 |
+| Busqueda jurisprudencia | si | 2 dias | P2 |
+| Modulo arbitraje + escalamiento | si | 3 dias | P2 |
+| Export PDF + share sheet nativo | si | 1 dia | P2 |
+| Portal empresa mobile | si | 1 semana | P2 |
+| Biometria (FaceID/TouchID) | N/A | 1 dia | P2 |
+| Deep linking Universal Links / App Links | N/A | 2 dias | P2 |
+| Stripe RN | si | 2-3 dias | P3 |
+| Tests E2E mobile (Maestro recomendado) | N/A | 3-5 dias | P2 |
+| Splash + iconos branded | placeholder | 1 dia | P2 |
+
+---
+
+## 12. Hallazgos criticos QA (snapshot 2026-04-29)
+
+> Lista priorizada de issues encontrados en el audit. Marcar como resuelto y borrar de aqui cuando se cierre.
+
+### P0 — Bloqueadores / Seguridad
+
+| # | Hallazgo | Repo | Accion |
+|---|---|---|---|
+| 1 | `~/justia-mobile/.env` tiene secretos server-side (`SUPABASE_SECRET_KEY`, `CLERK_SECRET_KEY`, `GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `PINECONE_API_KEY`, `UPSTASH_REDIS_REST_TOKEN`, `CRON_SECRET`) | mobile | Borrar lineas no `EXPO_PUBLIC_*`. Asumir keys comprometidas y rotar. Verificar `.gitignore` |
+| 2 | `bundleIdentifier: "com.anonymous.justia-mobile"` rechaza App Store / Play Store | mobile | Cambiar a real (ej. `mx.justia.consumidor` o `ai.justia.app`) |
+| 3 | CI rojo en `main`: `lint-and-build` y `e2e` fallan desde 2026-04-28 | web | Investigar logs en GitHub Actions, fixear o quarantine flaky tests |
+| 4 | Mobile sin tests (1 archivo placeholder de template) | mobile | Tests minimos: `lib/api.ts`, `lib/cache.ts`, validaciones |
+| 5 | `.gitignore` mobile parece template default — verificar que ignore `.env`, `ios/Pods/`, `*.swp` | mobile | Auditar y endurecer |
+| 6 | Archivo swap `app/(tabs)/.analyze.tsx.swp` en repo mobile (vim crash) | mobile | Borrar y agregar pattern a `.gitignore` |
+
+### P1 — Mejoras importantes
+
+| Area | Hallazgo | Repo |
+|---|---|---|
+| UX mobile | Resultados de IA mostrados con `alert()` nativo | mobile |
+| Resiliencia mobile | `lib/api.ts` sin timeout ni retry, errores genericos en redes flaky | mobile |
+| Observabilidad mobile | Sentry env var existe pero no se inicializa | mobile |
+| Errors mobile | Sin ErrorBoundary global ni screen-level | mobile |
+| Offline mobile | Sin manejo de sin-red (NetInfo + cola local) | mobile |
+| IA web | Solo Gemini, sin fallback a Claude/GPT-4o ante outage | web |
+| Email web | Resend desde dominio no verificado → spam folder (requiere dominio) | web |
+| Jurisprudencia web | Pinecone con ~10 casos vs target 500+ | web |
+| Verificacion empresa web | Cualquiera puede reclamar ser cualquier empresa | web |
+
+### P2 — Polish
+
+| Area | Hallazgo | Repo |
+|---|---|---|
+| Bundle web | 28 deps runtime (Three.js, Spline, Stripe, Sentry pesados); falta analyzer | web |
+| A11y web | Sin audit Lighthouse sistematico | web |
+| E2E web | Solo 3 flows; faltan Stripe, escalamiento, PDF, notificaciones | web |
+| Cron docs | `/api/cron` existe pero sin documentacion de jobs | web |
+| Tracking web | `track-tokens.ts` sin alertas de presupuesto | web |
+| Splash mobile | Iconos / splash siguen siendo template Expo | mobile |
+| Animaciones mobile | Reanimated instalado pero no usado | mobile |
+| Loading mobile | Cada pantalla maneja estados de carga distinto | mobile |
+
+---
+
+## 13. Estrategia de Dominio (sin dominio pagado aun)
+
+### 13.1 Que bloquea no tener dominio
+
+| Bloqueo | Impacto | Workaround temporal |
+|---|---|---|
+| Resend en spam folder | Alto — emails de notificacion llegan a spam | `onboarding@resend.dev` solo para dev |
+| Universal Links iOS / App Links Android | Medio — emails del backend abren navegador, no la app | Custom scheme `justiamobile://` (funciona pero feo) |
+| Apple/Google OAuth en produccion | Medio — algunos providers requieren callback URL verificado | `*.vercel.app` funciona para dev |
+| Trust del usuario | Medio — `justia-consumidor.vercel.app` se ve a desarrollo | — |
+| App Store listing | Bajo — campo opcional | Apuntar a Vercel temp |
+| SEO web | Bajo — Vercel preview URLs no indexan bien | — |
+
+### 13.2 Opciones de dominio (orden costo/impacto)
+
+| Dominio | Costo aprox/ano | Recomendacion |
+|---|---|---|
+| `justia.mx` | ~$30 USD | Mejor si target principal MX |
+| `justia.lat` | ~$20 USD | Bueno para AR + MX (regional) |
+| `justia.com.ar` | ~$20 USD | Bueno si target principal AR |
+| `justia.app` | ~$20 USD | Excelente para mobile-first (.app fuerza HTTPS) |
+| `justia.ai` | ~$70 USD | Premium, marca el angulo IA |
+
+**Mientras tanto**: el desarrollo continua 100% sobre `*.vercel.app` y custom scheme `justiamobile://`. El gasto se justifica el dia del go-to-market o submission a App Store.
+
+### 13.3 Que cambia el dia que se compre
+
+1. Configurar DNS en Vercel (5 min)
+2. Configurar SPF + DKIM + DMARC en Resend (30 min)
+3. Configurar `apple-app-site-association` y `assetlinks.json` en `/.well-known/` (1 hora) → habilita Universal Links / App Links
+4. Actualizar `NEXT_PUBLIC_APP_URL` y `EXPO_PUBLIC_API_URL`
+5. Actualizar callback URLs en Clerk dashboard
+
+---
+
+## 14. Roadmap Consolidado (web + mobile)
+
+### P0 — Bloqueadores (esta semana, ~1 dia total)
+
+- [ ] Borrar secretos server-side de `justia-mobile/.env` y rotar keys
+- [ ] Cambiar `bundleIdentifier` mobile a real
+- [ ] Auditar `.gitignore` mobile y borrar `.swp`
+- [ ] Investigar y arreglar CI rojo (lint-and-build + e2e) en web
+- [ ] Tests minimos `lib/api.ts` y `lib/cache.ts` en mobile
+- [ ] Crear remote en GitHub para `justia-mobile` y push inicial
+
+### P1 — MVP Mobile listo para beta (~2-3 semanas)
+
+- [ ] Reemplazar `alert()` por screens de resultado en mobile
+- [ ] Generacion + envio de reclamo formal (mobile)
+- [ ] Timeline visual del caso (mobile)
+- [ ] Push notifications (`expo-notifications` + endpoint backend)
+- [ ] Sign in with Apple nativo (mobile)
+- [ ] Sentry RN init + ErrorBoundary global (mobile)
+- [ ] Timeout/retry en `lib/api.ts` (mobile)
+- [ ] Build Android + EAS configurado (mobile)
+- [ ] Dialogo bidireccional + notificaciones in-app (mobile)
+- [ ] Fallback IA Gemini → Claude (web)
+- [ ] Verificacion robusta de empresa end-to-end (web)
+- [ ] Pipeline jurisprudencia full run, 500+ casos (web)
+
+### P2 — Produccion polish (~3-5 semanas)
+
+- [ ] Comprar dominio + DNS + Resend SPF/DKIM/DMARC
+- [ ] Busqueda jurisprudencia + arbitraje + escalamiento (mobile)
+- [ ] Export PDF + share sheet nativo (mobile)
+- [ ] Portal empresa mobile
+- [ ] Biometria FaceID/TouchID (mobile)
+- [ ] Deep linking Universal Links / App Links
+- [ ] Stripe RN (mobile)
+- [ ] Coverage E2E web (Stripe, PDF, escalamiento)
+- [ ] Tests E2E mobile (Maestro)
+- [ ] Lighthouse audit + a11y (web)
+- [ ] GDPR derecho a eliminacion (web)
+- [ ] Pen test OWASP ZAP (web)
+- [ ] Splash + iconos branded (mobile)
+
+### P3 — Growth (post-launch)
+
+- [ ] Tier freemium consumidor (Stripe)
+- [ ] Push notifications PWA (web)
+- [ ] Panel admin completo
+- [ ] Submit App Store + Play Store (EAS Submit)
+- [ ] Analytics dashboards (PostHog)
+
+---
+
+## 15. Salud por dominio (snapshot)
+
+```
+Web — justia-consumidor                Mobile — justia-mobile
+Auth         95%  ████████████░        Auth         75%  █████████░░░
+DB + RLS     95%  ████████████░        DB           75%  █████████░░░
+IA           85%  ██████████░░         IA (relay)   65%  ████████░░░░
+Pagos        95%  ████████████░        Pagos         0%  ░░░░░░░░░░░░
+Notificac.   95%  ████████████░        Notificac.   15%  ██░░░░░░░░░░
+Tests        75%  █████████░░░         Tests         0%  ░░░░░░░░░░░░
+Seguridad    90%  ███████████░         Seguridad    35%  ████░░░░░░░░ !!
+UX           85%  ██████████░░         UX           40%  █████░░░░░░░
+Observabil.  85%  ██████████░░         Observabil.  15%  ██░░░░░░░░░░
+Deploy       75%  █████████░░░ (CI)    Deploy       25%  ███░░░░░░░░░ (iOS dev)
+PWA / Push   65%  ████████░░░░         Push native   0%  ░░░░░░░░░░░░
+Cobertura    80%  █████████░░░         Cobertura    25%  ███░░░░░░░░░
+```
