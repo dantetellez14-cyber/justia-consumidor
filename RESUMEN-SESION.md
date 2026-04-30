@@ -1,7 +1,7 @@
 # JustIA Consumidor - Resumen Completo de Sesiones
 
 > Documento de referencia para continuar el desarrollo en una nueva sesion.
-> Ultima actualizacion: 30 de abril de 2026 (rev 5 — P1 progress, audit corregido)
+> Ultima actualizacion: 30 de abril de 2026 (rev 6 — verificacion empresa robusta)
 
 ---
 
@@ -386,10 +386,11 @@ FIRECRAWL_API_KEY=
 
 ### ALTO
 
-#### 7.1 Verificacion de Empresa (claim)
-- **Estado**: existe migracion `20260408_empresa_verification.sql` y script `verify-existing-companies.ts`
-- **Pendiente**: completar UX de verificacion (codigo invitacion / email corporativo / validacion manual) end-to-end y gating del portal hasta verificacion
-- **Archivos**: `src/app/api/empresa/route.ts`, `src/lib/empresa.ts`, `src/app/empresa/page.tsx`
+#### 7.1 Verificacion de Empresa (claim) — ✅ Cerrado (PR #13)
+- **Auto-verificacion**: heuristica `emailMatchesCompany` endurecida a token-level match (rechaza lookalikes como `telmexsa.com` para "Telmex"). Migra `20260408_empresa_verification.sql`.
+- **Verificacion manual**: nueva tabla `verification_requests` (migracion `20260430`), endpoint `POST /api/empresa/verify-request` con Zod + rate-limit, endpoints admin `GET /api/admin/verifications` y `POST /api/admin/verifications/[id]` para approve/reject. UI con form en `VerificationBanner`.
+- **Gating**: `/api/empresa/respond` ya rechaza con 403 si `account.verificada=false`.
+- **Pendiente P2**: UI admin para consumir endpoints (lista pendientes + boton approve/reject), email notification al requester en aprobacion/rechazo.
 
 #### 7.2 Dominio DNS + Verificacion Resend
 - **Estado**: emails funcionan pero desde dominio no verificado
@@ -663,7 +664,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 | ~~IA web fallback~~ | ✅ Ya implementado — `/api/analyze/route.ts` itera Gemini → Anthropic; falta verificar `ANTHROPIC_API_KEY` en Vercel |
 | Email web | Resend desde dominio no verificado → spam folder (requiere dominio) | web |
 | Jurisprudencia web | Pinecone con ~10 casos vs target 500+ | web |
-| Verificacion empresa web | Cualquiera puede reclamar ser cualquier empresa | web |
+| ~~Verificacion empresa web~~ | ✅ Cerrado (PR #13) — heuristica endurecida + flow manual con tabla `verification_requests` + endpoints admin |
 
 ### P2 — Polish
 
@@ -744,7 +745,7 @@ Todos cerrados en sesion de 2026-04-30:
 - [ ] Build Android + EAS configurado (mobile)
 - [ ] Dialogo bidireccional + notificaciones in-app (mobile)
 - [ ] Fallback IA Gemini → Claude (web)
-- [ ] Verificacion robusta de empresa end-to-end (web)
+- [x] Verificacion robusta de empresa (web; PR #13 — heuristica endurecida + flow manual + endpoints admin)
 - [ ] Pipeline jurisprudencia full run, 500+ casos (web)
 
 ### P2 — Produccion polish (~3-5 semanas)
