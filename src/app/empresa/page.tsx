@@ -89,11 +89,43 @@ function normalizeForDisplay(name: string): string {
 
 function VerificationBanner({ companyName }: { readonly companyName: string }) {
   const domain = normalizeForDisplay(companyName);
+  const [showForm, setShowForm] = useState(false);
+  const [justification, setJustification] = useState("");
+  const [docUrl, setDocUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (justification.trim().length < 20 || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/empresa/verify-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          justification: justification.trim(),
+          ...(docUrl.trim() ? { document_url: docUrl.trim() } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "No se pudo enviar la solicitud.");
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Error inesperado.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
       <div className="flex items-start gap-3">
         <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-        <div>
+        <div className="flex-1">
           <h3 className="text-sm font-bold text-amber-800">
             Empresa pendiente de verificacion
           </h3>
@@ -104,6 +136,66 @@ function VerificationBanner({ companyName }: { readonly companyName: string }) {
           <p className="mt-2 text-xs text-amber-600">
             Mientras tanto, puedes ver tus reclamos y estadisticas en modo lectura.
           </p>
+
+          {submitted ? (
+            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+              Solicitud enviada. Un administrador la revisara pronto.
+            </div>
+          ) : showForm ? (
+            <div className="mt-4 space-y-2">
+              <label className="block text-xs font-semibold text-amber-900">
+                Justificacion (minimo 20 caracteres)
+              </label>
+              <textarea
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                rows={4}
+                placeholder="Soy [rol] en [empresa]. No tengo email corporativo porque..."
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none"
+                disabled={submitting}
+              />
+              <label className="block text-xs font-semibold text-amber-900">
+                Link a documento de respaldo (opcional)
+              </label>
+              <input
+                type="url"
+                value={docUrl}
+                onChange={(e) => setDocUrl(e.target.value)}
+                placeholder="https://drive.google.com/..."
+                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-amber-500 focus:outline-none"
+                disabled={submitting}
+              />
+              {submitError ? (
+                <p className="text-xs text-red-600">{submitError}</p>
+              ) : null}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || justification.trim().length < 20}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {submitting ? "Enviando..." : "Enviar solicitud"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  disabled={submitting}
+                  className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="mt-3 text-xs font-medium text-amber-700 underline hover:text-amber-900"
+            >
+              ¿No tienes email corporativo? Solicitar verificacion manual
+            </button>
+          )}
         </div>
       </div>
     </div>
