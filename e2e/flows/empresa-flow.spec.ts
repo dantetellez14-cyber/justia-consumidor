@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { signInAsTestUser } from "../helpers/auth";
 
 /**
  * E2E tests for the /empresa portal.
@@ -7,9 +8,14 @@ import { test, expect } from "@playwright/test";
  * The default handler returns a registered company with 2 pending complaints.
  *
  * TODO(auth-tests): /empresa requiere sesion. Tests en quarentena hasta
- * configurar test user en Clerk dashboard + clerk.signIn(). Ver
- * e2e/flows/auth-flow.spec.ts para el plan de reactivacion.
+ * configurar test user en Clerk dashboard + secrets. Ver auth-flow.spec.ts.
  */
+
+test.beforeEach(async ({ page }) => {
+  // Skipped at runtime when describe is `.fixme`. Once unfixme'd, this
+  // ensures every empresa portal test starts with a logged-in user.
+  await signInAsTestUser(page);
+});
 
 test.describe.fixme("Empresa portal — registered company", () => {
   test("dashboard carga con nombre de empresa y estadísticas", async ({

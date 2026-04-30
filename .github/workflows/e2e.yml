@@ -45,6 +45,11 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           NEXT_PUBLIC_MSW_ENABLED: "true"
+          # Auth-required tests (currently quarantined with test.fixme)
+          # use these secrets via e2e/helpers/auth.ts. Empty values are OK:
+          # the helper only runs once tests are unfixme'd.
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
