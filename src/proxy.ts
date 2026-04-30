@@ -21,7 +21,17 @@ const isPublicRoute = createRouteMatcher([
   "/api/search-jurisprudencia",
   // Post-payment success page (handles its own auth state)
   "/pro/success",
+  // Pre-launch waitlist landing + API
+  "/proximamente",
+  "/api/waitlist",
+  // SEO evergreen guides
+  "/guias(.*)",
+  // SEO infrastructure
+  "/sitemap.xml",
+  "/robots.txt",
 ]);
+
+const PRELAUNCH_MODE = process.env.NEXT_PUBLIC_PRELAUNCH_MODE === "true";
 
 // Admin UI pages require both authentication AND admin role
 const isAdminPage = createRouteMatcher(["/admin(.*)"]);
@@ -35,6 +45,12 @@ function isAdminUser(userId: string): boolean {
 }
 
 export default clerkMiddleware(async (auth, request) => {
+  // Pre-launch mode: redirect "/" to /proximamente. The app remains
+  // accessible at /app and /admin for QA. Toggle via NEXT_PUBLIC_PRELAUNCH_MODE.
+  if (PRELAUNCH_MODE && request.nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/proximamente", request.url));
+  }
+
   if (isPublicRoute(request)) return;
 
   // Require Clerk session for all non-public routes
