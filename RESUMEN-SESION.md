@@ -1,7 +1,7 @@
 # JustIA Consumidor - Resumen Completo de Sesiones
 
 > Documento de referencia para continuar el desarrollo en una nueva sesion.
-> Ultima actualizacion: 30 de abril de 2026 (rev 4 — todos los P0 cerrados)
+> Ultima actualizacion: 30 de abril de 2026 (rev 5 — P1 progress, audit corregido)
 
 ---
 
@@ -46,7 +46,8 @@ JustIA tiene **dos apps** que comparten el mismo backend:
 | Cache cliente | SWR | stale-while-revalidate |
 | Rate limiting | Upstash Ratelimit | Sliding window, in-memory fallback |
 | Email | Resend | Transaccional, templates HTML |
-| IA | Google Gemini 2.0 Flash | @google/generative-ai |
+| IA primaria | Google Gemini 2.5 Flash | @google/generative-ai |
+| IA fallback | Anthropic Claude Haiku 4.5 | @anthropic-ai/sdk (auto-fallback en `/api/analyze`) |
 | Vector DB | Pinecone | Jurisprudencia embeddings |
 | Pagos | Stripe | Suscripciones empresa (Pro plan) |
 | Analytics | PostHog | Con cookie consent |
@@ -334,8 +335,11 @@ SUPABASE_SECRET_KEY=
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 
-# Google Gemini AI
+# Google Gemini AI (provider primario)
 GEMINI_API_KEY=
+
+# Anthropic Claude (provider fallback — /api/analyze itera providers)
+ANTHROPIC_API_KEY=
 
 # Pinecone Vector DB
 PINECONE_API_KEY=
@@ -583,14 +587,15 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
 | Feature | Existe en web | Esfuerzo mobile | Prioridad |
 |---|---|---|---|
-| Resultado de analisis IA en pantalla (no `alert()`) | si | 1-2 dias | P1 |
+| Resultado de analisis IA en pantalla (no `alert()`) | si | ya hecho | ✅ Resuelto — `app/(tabs)/analyze.tsx` tiene UI completa de cards (probabilidad, monto, empresa, analisis legal, save). Audit anterior estaba basado en historia outdated del primer scaffold |
 | Generacion + envio de reclamo formal | si | 3-4 dias | P1 |
 | Timeline visual del caso (CaseTracker) | si | 3-4 dias | P1 |
 | Dialogo bidireccional (`MessageThread`) | si | 3 dias | P1 |
 | Notificaciones in-app (bell + feed) | si | 2 dias | P1 |
 | Push notifications nativas (`expo-notifications`) | N/A | 4-5 dias | P1 |
 | Sign in with Apple nativo | parcial | 1 dia | P1 |
-| Sentry RN init + ErrorBoundary global | env existe | 1 dia | P1 |
+| ErrorBoundary global custom (Lucide + retry button + dev info) | N/A | ya hecho | ✅ Resuelto — `components/ErrorBoundary.tsx` (justia-mobile PR #2) |
+| Sentry RN init | env existe | 1 dia | P1 — pendiente (requiere plugin Expo + EAS config) |
 | Timeout/retry en `lib/api.ts` (AbortController) | N/A | 2 horas | P1 |
 | Build Android funcional | no | 1 dia | P1 |
 | EAS Build + EAS Submit configurado | no | 2 dias | P1 |
@@ -650,12 +655,12 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 | Area | Hallazgo | Repo |
 |---|---|---|
 | E2E web | 14/15 tests en quarentena, falta auth real (ver 12.1) | web |
-| UX mobile | Resultados de IA mostrados con `alert()` nativo | mobile |
-| Resiliencia mobile | `lib/api.ts` sin timeout ni retry, errores genericos en redes flaky | mobile |
+| ~~UX mobile alert()~~ | ✅ Falso positivo — `analyze.tsx` ya tiene UI de cards, sin `alert()` |
+| ~~Resiliencia mobile~~ | ✅ Resuelto — timeout + retry exponencial + `ApiError` (mobile PR #2) |
+| ~~Errors mobile~~ | ✅ Resuelto — `ErrorBoundary` custom (mobile PR #2) |
 | Observabilidad mobile | Sentry env var existe pero no se inicializa | mobile |
-| Errors mobile | Sin ErrorBoundary global ni screen-level | mobile |
 | Offline mobile | Sin manejo de sin-red (NetInfo + cola local) | mobile |
-| IA web | Solo Gemini, sin fallback a Claude/GPT-4o ante outage | web |
+| ~~IA web fallback~~ | ✅ Ya implementado — `/api/analyze/route.ts` itera Gemini → Anthropic; falta verificar `ANTHROPIC_API_KEY` en Vercel |
 | Email web | Resend desde dominio no verificado → spam folder (requiere dominio) | web |
 | Jurisprudencia web | Pinecone con ~10 casos vs target 500+ | web |
 | Verificacion empresa web | Cualquiera puede reclamar ser cualquier empresa | web |
@@ -726,12 +731,15 @@ Todos cerrados en sesion de 2026-04-30:
 ### P1 — MVP Mobile listo para beta (~2-3 semanas)
 
 - [ ] Reactivar 14 tests E2E web autenticados (test user Clerk + `clerk.signIn`, ver 12.1)
-- [ ] Reemplazar `alert()` por screens de resultado en mobile
+- [x] ~~Reemplazar `alert()` por screens de resultado en mobile~~ (falso positivo: ya estaba hecho)
 - [ ] Generacion + envio de reclamo formal (mobile)
 - [ ] Timeline visual del caso (mobile)
 - [ ] Push notifications (`expo-notifications` + endpoint backend)
 - [ ] Sign in with Apple nativo (mobile)
-- [ ] Sentry RN init + ErrorBoundary global (mobile)
+- [x] ErrorBoundary global custom (mobile PR #2)
+- [ ] Sentry RN init (mobile, requiere plugin Expo + EAS)
+- [x] Timeout/retry en `lib/api.ts` (mobile PR #2)
+- [x] Fallback IA Gemini → Claude (web; ya implementado en `/api/analyze`, requiere `ANTHROPIC_API_KEY` en Vercel)
 - [ ] Timeout/retry en `lib/api.ts` (mobile)
 - [ ] Build Android + EAS configurado (mobile)
 - [ ] Dialogo bidireccional + notificaciones in-app (mobile)
@@ -771,13 +779,13 @@ Todos cerrados en sesion de 2026-04-30:
 Web — justia-consumidor                Mobile — justia-mobile
 Auth         95%  ████████████░        Auth         75%  █████████░░░
 DB + RLS     95%  ████████████░        DB           75%  █████████░░░
-IA           85%  ██████████░░         IA (relay)   65%  ████████░░░░
+IA           95%  ████████████░ (fb)   IA (relay)   80%  ██████████░░ (retry)
 Pagos        95%  ████████████░        Pagos         0%  ░░░░░░░░░░░░
 Notificac.   95%  ████████████░        Notificac.   15%  ██░░░░░░░░░░
-Tests        50%  ██████░░░░░░ (e2e fixme) Tests     20%  ███░░░░░░░░░ (14 unit)
+Tests        50%  ██████░░░░░░ (e2e fixme) Tests     30%  ████░░░░░░░░ (20 unit)
 Seguridad    90%  ███████████░         Seguridad    80%  █████████░░░ (saneado)
 UX           85%  ██████████░░         UX           40%  █████░░░░░░░
-Observabil.  85%  ██████████░░         Observabil.  15%  ██░░░░░░░░░░
+Observabil.  85%  ██████████░░         Observabil.  35%  ████░░░░░░░░ (ErrorBoundary)
 Deploy       95%  ████████████░ (CI ✓) Deploy       30%  ████░░░░░░░░ (iOS dev + GH)
 PWA / Push   65%  ████████░░░░         Push native   0%  ░░░░░░░░░░░░
 Cobertura    80%  █████████░░░         Cobertura    25%  ███░░░░░░░░░
