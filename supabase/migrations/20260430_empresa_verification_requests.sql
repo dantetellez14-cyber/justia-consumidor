@@ -32,13 +32,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_verification_requests_one_pending_per_compa
   WHERE status = 'pending';
 
 -- updated_at maintenance trigger
+-- search_path is pinned to '' to satisfy Supabase advisor lint
+-- 0011_function_search_path_mutable.
 CREATE OR REPLACE FUNCTION verification_requests_set_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_verification_requests_updated_at ON verification_requests;
 CREATE TRIGGER trg_verification_requests_updated_at
