@@ -97,4 +97,12 @@ describe("emailMatchesCompany", () => {
   it("matches partial domain in normalized name", () => {
     expect(emailMatchesCompany("user@bbva.com.ar", "BBVA Argentina")).toBe(true);
   });
+
+  it("rejects token-level lookalikes (substring no longer matches)", () => {
+    // "telmexsa" used to match "Telmex" with the old substring heuristic
+    // because the normalized name "telmex" was contained in "telmexsa".
+    // The hardened token-level match requires equality, not substring.
+    expect(emailMatchesCompany("juan@telmexsa.com", "Telmex")).toBe(false);
+    expect(emailMatchesCompany("ana@bbvanet.com", "BBVA Argentina")).toBe(false);
+  });
 });

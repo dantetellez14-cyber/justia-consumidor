@@ -129,13 +129,28 @@ export function extractCompanyFromEmail(email: string): string | null {
 /**
  * Check if a user's email domain matches a company name.
  * Used to verify corporate email ownership.
+ *
+ * Token-level match (stricter than substring): the email domain candidate
+ * must equal one of the words in the normalized company name. Prevents
+ * `juan@telmexsa.com` from auto-verifying as company "Telmex" via substring
+ * inclusion, while still letting `juan@telmex.com.mx` verify correctly.
  */
 export function emailMatchesCompany(email: string, companyName: string): boolean {
   const domain = extractCompanyFromEmail(email);
   if (!domain) return false;
 
   const normalized = normalizeEmpresaName(companyName);
-  return normalized.includes(domain);
+  const tokens = normalized.split(/\s+/).filter((t) => t.length >= 3);
+
+  // Exact token match.
+  if (tokens.includes(domain)) return true;
+
+  // Inverse: company name is a single token contained in domain (e.g. company
+  // "Bimbo" + domain "bimbo" — already covered by exact match — but also
+  // allows for cases where the normalized name has only one short token).
+  if (tokens.length === 1 && tokens[0] === domain) return true;
+
+  return false;
 }
 
 /**
@@ -323,6 +338,214 @@ export async function registerCompany(
   });
 
   return account as CompanyAccount;
+}
+
+// ── Manual verification requests ──
+
+export type VerificationStatus = "pending" | "approved" | "rejected";
+
+export interface VerificationRequest {
+  readonly id: string;
+  readonly company_id: string;
+  readonly requester_clerk_id: string;
+  readonly requester_email: string;
+  readonly justification: string;
+  readonly document_url: string | null;
+  readonly status: VerificationStatus;
+  readonly reviewed_by: string | null;
+  readonly reviewed_at: string | null;
+  readonly review_notes: string | null;
+  readonly created_at: string;
+  readonly updated_at: string;
+}
+
+/**
+ * Submit a manual verification request for a company.
+ *
+ * Used when the requester's email does not match the company name heuristic
+ * (so they cannot be auto-verified) but they have a legitimate reason to
+ * claim/run the company portal — e.g. holding companies, agencies, or
+ * legacy email setups.
+ *
+ * Constraints:
+ * - The DB enforces only one pending request per company at a time
+ *   (unique partial index `uq_verification_requests_one_pending_per_company`).
+ * - Skipped if the company is already verified.
+ */
+export async function createVerificationRequest(params: {
+  clerkUserId: string;
+  email: string;
+  companyId: string;
+  justification: string;
+  documentUrl?: string | null;
+}): Promise<VerificationRequest> {
+  const { clerkUserId, email, companyId, justification, documentUrl } = params;
+
+  // Refuse if company is already verified — no point in queuing the request.
+  const { data: company } = await supabase
+    .from("company_accounts")
+    .select("id, verificada")
+    .eq("id", companyId)
+    .single();
+
+  if (!company) throw new Error("Empresa no encontrada.");
+  if ((company as { verificada: boolean }).verificada) {
+    throw new Error("Esta empresa ya esta verificada.");
+  }
+
+  const { data, error } = await supabase
+    .from("verification_requests")
+    .insert({
+      company_id: companyId,
+      requester_clerk_id: clerkUserId,
+      requester_email: email,
+      justification,
+      document_url: documentUrl ?? null,
+      status: "pending",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    // Unique partial index → 23505 when a pending request already exists.
+    if ((error as { code?: string }).code === "23505") {
+      throw new Error(
+        "Ya existe una solicitud pendiente de revision para esta empresa."
+      );
+    }
+    throw new Error(`Error creando solicitud de verificacion: ${error.message}`);
+  }
+
+  return data as VerificationRequest;
+}
+
+/**
+ * List pending verification requests. Admin-only.
+ */
+export async function listPendingVerificationRequests(): Promise<
+  ReadonlyArray<VerificationRequest>
+> {
+  const { data, error } = await supabase
+    .from("verification_requests")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`Error listando solicitudes: ${error.message}`);
+  return (data ?? []) as ReadonlyArray<VerificationRequest>;
+}
+
+/**
+ * Approve a verification request. Admin-only.
+ *
+ * Side-effect: marks the company as verificada, links the requester as an
+ * admin user (with email_verificado=true) if not already linked, and
+ * records the review on the request row.
+ */
+export async function approveVerificationRequest(params: {
+  requestId: string;
+  adminClerkId: string;
+  notes?: string;
+}): Promise<{ company_id: string }> {
+  const { requestId, adminClerkId, notes } = params;
+
+  const { data: req } = await supabase
+    .from("verification_requests")
+    .select("*")
+    .eq("id", requestId)
+    .single();
+
+  if (!req) throw new Error("Solicitud no encontrada.");
+  const request = req as VerificationRequest;
+  if (request.status !== "pending") {
+    throw new Error(`La solicitud ya esta en estado "${request.status}".`);
+  }
+
+  const now = new Date().toISOString();
+
+  // Mark company verified.
+  const { error: companyErr } = await supabase
+    .from("company_accounts")
+    .update({
+      verificada: true,
+      verificada_por: adminClerkId,
+      verificada_at: now,
+    })
+    .eq("id", request.company_id);
+
+  if (companyErr) throw new Error(`Error verificando empresa: ${companyErr.message}`);
+
+  // Ensure the requester is linked. If they already have a row, just bump
+  // email_verificado; otherwise create a new admin link.
+  const { data: existingLink } = await supabase
+    .from("company_users")
+    .select("id")
+    .eq("clerk_user_id", request.requester_clerk_id)
+    .eq("company_id", request.company_id)
+    .maybeSingle();
+
+  if (existingLink) {
+    await supabase
+      .from("company_users")
+      .update({ email_verificado: true })
+      .eq("id", (existingLink as { id: string }).id);
+  } else {
+    await supabase.from("company_users").insert({
+      clerk_user_id: request.requester_clerk_id,
+      company_id: request.company_id,
+      rol: "admin",
+      email_verificado: true,
+    });
+  }
+
+  // Mark request as approved.
+  const { error: reqErr } = await supabase
+    .from("verification_requests")
+    .update({
+      status: "approved",
+      reviewed_by: adminClerkId,
+      reviewed_at: now,
+      review_notes: notes ?? null,
+    })
+    .eq("id", requestId);
+
+  if (reqErr) throw new Error(`Error actualizando solicitud: ${reqErr.message}`);
+
+  return { company_id: request.company_id };
+}
+
+/**
+ * Reject a verification request. Admin-only.
+ */
+export async function rejectVerificationRequest(params: {
+  requestId: string;
+  adminClerkId: string;
+  notes?: string;
+}): Promise<void> {
+  const { requestId, adminClerkId, notes } = params;
+
+  const { data: req } = await supabase
+    .from("verification_requests")
+    .select("status")
+    .eq("id", requestId)
+    .single();
+
+  if (!req) throw new Error("Solicitud no encontrada.");
+  if ((req as { status: VerificationStatus }).status !== "pending") {
+    throw new Error("La solicitud ya fue revisada.");
+  }
+
+  const { error } = await supabase
+    .from("verification_requests")
+    .update({
+      status: "rejected",
+      reviewed_by: adminClerkId,
+      reviewed_at: new Date().toISOString(),
+      review_notes: notes ?? null,
+    })
+    .eq("id", requestId);
+
+  if (error) throw new Error(`Error rechazando solicitud: ${error.message}`);
 }
 
 // ── Complaint retrieval for companies ──
