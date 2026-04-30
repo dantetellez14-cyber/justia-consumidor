@@ -81,16 +81,32 @@ export async function POST(request: NextRequest) {
 
   const { relato } = parsed.data;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(generateDemoAnalysis(relato));
+  const REQUIRED_FIELDS = [
+    "empresa",
+    "producto_servicio",
+    "monto_reclamo",
+    "fecha_incidente",
+    "core_grievance",
+    "probabilidad_exito",
+    "analisis_legal",
+    "pais_detectado",
+  ];
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+  if (!geminiKey && !anthropicKey) {
+    return NextResponse.json(
+      { error: "Nuestros servidores están procesando un alto volumen de reclamos en este momento. Tu caso es muy importante para nosotros, por favor intenta enviarlo nuevamente en un par de minutos." },
+      { status: 503 }
+    );
   }
 
-  try {
+  async function tryGemini(): Promise<{ analysis: Record<string, unknown>; latencyMs: number; usage: { input: number; output: number } }> {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
-    const genai = new GoogleGenerativeAI(apiKey);
+    const genai = new GoogleGenerativeAI(geminiKey!);
     const model = genai.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0.3,
@@ -103,88 +119,97 @@ export async function POST(request: NextRequest) {
     const result = await model.generateContent(relato);
     const latencyMs = Date.now() - t0;
     const rawText = result.response.text();
-
     const usage = result.response.usageMetadata;
-    void trackTokenUsage({
-      userId: userId ?? null,
-      route: "/api/analyze",
-      model: "gemini-2.0-flash",
-      provider: "gemini",
-      inputTokens: usage?.promptTokenCount ?? 0,
-      outputTokens: usage?.candidatesTokenCount ?? 0,
+
+    return {
+      analysis: extractJSON(rawText),
       latencyMs,
-      success: true,
-    });
-
-    const analysis = extractJSON(rawText);
-
-    const required = [
-      "empresa",
-      "producto_servicio",
-      "monto_reclamo",
-      "fecha_incidente",
-      "core_grievance",
-      "probabilidad_exito",
-      "analisis_legal",
-      "pais_detectado",
-    ];
-    for (const field of required) {
-      if (!(field in analysis)) {
-        throw new Error(`Campo requerido faltante: ${field}`);
-      }
-    }
-
-    const pais = String(analysis.pais_detectado).toUpperCase();
-    const normalizedAnalysis = {
-      ...analysis,
-      monto_reclamo: Number(analysis.monto_reclamo),
-      probabilidad_exito: Math.min(1, Math.max(0, Number(analysis.probabilidad_exito))),
-      pais_detectado: pais === "MX" ? "MX" : "AR",
+      usage: { input: usage?.promptTokenCount ?? 0, output: usage?.candidatesTokenCount ?? 0 },
     };
+  }
 
-    log.info(
-      { empresa: String(analysis.empresa), pais: normalizedAnalysis.pais_detectado, latencyMs },
-      "Analysis completed"
-    );
+  async function tryAnthropic(): Promise<{ analysis: Record<string, unknown>; latencyMs: number; usage: { input: number; output: number } }> {
+    const Anthropic = (await import("@anthropic-ai/sdk")).default;
+    const client = new Anthropic({ apiKey: anthropicKey! });
 
-    return NextResponse.json(normalizedAnalysis);
-  } catch (err) {
-    logError("Gemini analysis error", err, { route: "/api/analyze" });
+    const t0 = Date.now();
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      temperature: 0.3,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: relato }],
+    });
+    const latencyMs = Date.now() - t0;
 
-    const message = err instanceof Error ? err.message : "";
-    // Quota exhausted or auth error → tell the user, don't fake a result
-    if (/quota|429|resource.exhausted|api.key|permission/i.test(message)) {
-      return NextResponse.json(
-        { error: "El servicio de análisis no está disponible temporalmente. Intenta en unos minutos." },
-        { status: 503 }
-      );
+    const block = message.content.find((c) => c.type === "text");
+    if (!block || block.type !== "text") {
+      throw new Error("Respuesta de Anthropic sin contenido de texto.");
     }
 
-    // Any other error (network, JSON parse, etc.) → demo fallback
-    return NextResponse.json(generateDemoAnalysis(relato));
+    return {
+      analysis: extractJSON(block.text),
+      latencyMs,
+      usage: { input: message.usage.input_tokens, output: message.usage.output_tokens },
+    };
   }
-}
 
-function generateDemoAnalysis(relato: string): Record<string, unknown> {
-  const isMexico = /\b(MXN|pesos mexicanos|PROFECO|México|mexico|CDMX)\b/i.test(relato);
-  const amountMatch = relato.match(/\$\s?([\d.,]+)/);
-  const amount = amountMatch
-    ? Number(amountMatch[1].replace(/[.,]/g, ""))
-    : isMexico ? 15000 : 450000;
+  type Provider = { name: "gemini" | "anthropic"; model: string; run: typeof tryGemini };
+  const providers: Provider[] = [];
+  if (geminiKey) providers.push({ name: "gemini", model: "gemini-2.5-flash", run: tryGemini });
+  if (anthropicKey) providers.push({ name: "anthropic", model: "claude-haiku-4-5-20251001", run: tryAnthropic });
 
-  const companyMatch = relato.match(/(?:empresa|tienda|marca|compañía)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ\s]+?)(?:\s+(?:pero|y|no|se|me|que|del|de|la|el|en|por|con|sin))/i);
-  const empresa = companyMatch ? companyMatch[1].trim() : "Empresa no especificada";
+  let lastError: unknown = null;
 
-  return {
-    empresa,
-    producto_servicio: "Producto/servicio según relato del consumidor",
-    monto_reclamo: amount,
-    fecha_incidente: "Fecha reciente",
-    core_grievance: "Incumplimiento de garantía y/o negativa de reembolso",
-    probabilidad_exito: 0.72,
-    analisis_legal: isMexico
-      ? "Conforme a la Ley Federal de Protección al Consumidor (LFPC), artículos 7, 32 y 92, el consumidor tiene derecho a la reparación, reposición o devolución del bien. La PROFECO puede intervenir como mediador. NOTA: Este es un análisis de demostración."
-      : "Conforme a la Ley 24.240 de Defensa del Consumidor, artículos 10 bis, 11 y 17, el consumidor tiene derecho a la reparación, sustitución o devolución del producto. El plazo de garantía legal es de 6 meses. NOTA: Este es un análisis de demostración.",
-    pais_detectado: isMexico ? "MX" : "AR",
-  };
+  for (const provider of providers) {
+    try {
+      const { analysis, latencyMs, usage } = await provider.run();
+
+      for (const field of REQUIRED_FIELDS) {
+        if (!(field in analysis)) {
+          throw new Error(`Campo requerido faltante: ${field}`);
+        }
+      }
+
+      const pais = String(analysis.pais_detectado).toUpperCase();
+      const normalizedAnalysis = {
+        ...analysis,
+        monto_reclamo: Number(analysis.monto_reclamo),
+        probabilidad_exito: Math.min(1, Math.max(0, Number(analysis.probabilidad_exito))),
+        pais_detectado: pais === "MX" ? "MX" : "AR",
+      };
+
+      void trackTokenUsage({
+        userId: userId ?? null,
+        route: "/api/analyze",
+        model: provider.model,
+        provider: provider.name,
+        inputTokens: usage.input,
+        outputTokens: usage.output,
+        latencyMs,
+        success: true,
+      });
+
+      log.info(
+        { provider: provider.name, empresa: String(analysis.empresa), pais: normalizedAnalysis.pais_detectado, latencyMs },
+        "Analysis completed"
+      );
+
+      return NextResponse.json(normalizedAnalysis);
+    } catch (err) {
+      lastError = err;
+      logError(`${provider.name} analysis failed, trying next provider`, err, {
+        route: "/api/analyze",
+        provider: provider.name,
+      });
+    }
+  }
+
+  logError("All providers failed for /api/analyze", lastError, { route: "/api/analyze" });
+  return NextResponse.json(
+    {
+      error: "Nuestros servidores están procesando un alto volumen de reclamos en este momento. Tu caso es muy importante para nosotros, por favor intenta enviarlo nuevamente en un par de minutos.",
+    },
+    { status: 503 }
+  );
 }

@@ -11,7 +11,7 @@ export interface TokenTrackingParams {
   userId: string | null;
   route: string;
   model: string;
-  provider: "gemini" | "ollama" | "pinecone" | "demo";
+  provider: "gemini" | "anthropic" | "ollama" | "pinecone" | "demo";
   inputTokens: number;
   outputTokens: number;
   latencyMs?: number;
