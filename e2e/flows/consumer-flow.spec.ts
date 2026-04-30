@@ -1,13 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mockAnalysis } from "../fixtures/analysis";
+import { signInAsTestUser } from "../helpers/auth";
 
-// TODO(auth-tests): todos los tests de este archivo estan en quarentena.
-// El boton "Comenzar tu reclamo" en welcome-hero.tsx ahora gatea el flujo
-// detras de Clerk SignInButton modal cuando no hay sesion. Para reactivar:
-// ver TODO en e2e/flows/auth-flow.spec.ts (necesita test user + clerk.signIn).
+// TODO(auth-tests): todos los tests de este archivo en quarentena. El boton
+// "Comenzar tu reclamo" en welcome-hero.tsx gatea el flujo detras de Clerk
+// SignInButton modal cuando no hay sesion. Reactivar: ver auth-flow.spec.ts.
 
 // Helper: navigate from welcome to the analyze form and submit it
 async function fillAndSubmitForm(page: Page) {
+  await signInAsTestUser(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Comenzar tu reclamo" }).click();
 
