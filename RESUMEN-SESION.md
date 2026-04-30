@@ -1,7 +1,7 @@
 # JustIA Consumidor - Resumen Completo de Sesiones
 
 > Documento de referencia para continuar el desarrollo en una nueva sesion.
-> Ultima actualizacion: 30 de abril de 2026 (rev 3 — P0 cerrados, CI verde, deuda E2E documentada)
+> Ultima actualizacion: 30 de abril de 2026 (rev 4 — todos los P0 cerrados)
 
 ---
 
@@ -619,7 +619,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 | 3 | CI rojo en `main` (lint-and-build + e2e) | web | ✅ Resuelto — `lib/stripe.ts` ahora lazy-init via Proxy (PR #7); 14 tests E2E auth-required en quarentena con `test.fixme` (PR #8). CI verde desde 2026-04-30 |
 | 4 | `.gitignore` mobile parece template default | mobile | ✅ Resuelto — endurecido con `.env`, `*.swp`, `ios/Pods/`, `ios/Podfile.lock` |
 | 5 | Archivo swap `app/(tabs)/.analyze.tsx.swp` en repo mobile | mobile | ✅ Resuelto — pattern agregado a `.gitignore` |
-| 6 | Mobile sin tests (1 placeholder de template) | mobile | 🔴 Pendiente — sigue P0. Tests minimos: `lib/api.ts`, `lib/cache.ts`, validaciones |
+| 6 | Mobile sin tests | mobile | ✅ Resuelto — Vitest 4 + 14 tests para `lib/api.ts` (9) y `lib/cache.ts` (5). Scripts `npm test` y `npm run typecheck` (justia-mobile PR #1) |
 | 7 | E2E web tiene 14/15 tests en quarentena por falta de auth real | web | 🟠 P1 nuevo — ver seccion 12.1 abajo |
 
 ### 12.1 Deuda E2E web — reactivar tests autenticados (P1)
@@ -714,17 +714,14 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
 ### P0 — Bloqueadores
 
-Cerrados en sesion de 2026-04-30:
+Todos cerrados en sesion de 2026-04-30:
 
-- [x] Borrar secretos server-side de `justia-mobile/.env` (PR — saneado y purgado de historia git)
+- [x] Borrar secretos server-side de `justia-mobile/.env` (saneado y purgado de historia git)
 - [x] Cambiar `bundleIdentifier` mobile a real (`mx.justia.consumidor`)
 - [x] Auditar `.gitignore` mobile (incluye `.env`, `*.swp`, `ios/Pods/`)
 - [x] Crear remote en GitHub para `justia-mobile` y push inicial ([repo](https://github.com/dantetellez14-cyber/justia-mobile))
 - [x] Investigar y arreglar CI rojo (PR #7 lazy-init Stripe + PR #8 quarantine e2e auth tests)
-
-Sigue abierto:
-
-- [ ] Tests minimos `lib/api.ts` y `lib/cache.ts` en mobile
+- [x] Tests minimos `lib/api.ts` y `lib/cache.ts` en mobile (justia-mobile PR #1, 14 tests Vitest)
 
 ### P1 — MVP Mobile listo para beta (~2-3 semanas)
 
@@ -777,7 +774,7 @@ DB + RLS     95%  ████████████░        DB           75
 IA           85%  ██████████░░         IA (relay)   65%  ████████░░░░
 Pagos        95%  ████████████░        Pagos         0%  ░░░░░░░░░░░░
 Notificac.   95%  ████████████░        Notificac.   15%  ██░░░░░░░░░░
-Tests        50%  ██████░░░░░░ (e2e fixme) Tests      0%  ░░░░░░░░░░░░
+Tests        50%  ██████░░░░░░ (e2e fixme) Tests     20%  ███░░░░░░░░░ (14 unit)
 Seguridad    90%  ███████████░         Seguridad    80%  █████████░░░ (saneado)
 UX           85%  ██████████░░         UX           40%  █████░░░░░░░
 Observabil.  85%  ██████████░░         Observabil.  15%  ██░░░░░░░░░░
