@@ -70,6 +70,14 @@ export const searchJurisprudenciaSchema = z.object({
 
 export type SearchJurisprudenciaInput = z.infer<typeof searchJurisprudenciaSchema>;
 
+export const waitlistSchema = z.object({
+  email: z.string().email("Email inválido"),
+  pais: z.enum(["AR", "MX"], { message: "País debe ser AR o MX" }),
+  source: z.string().max(100).optional(),
+});
+
+export type WaitlistInput = z.infer<typeof waitlistSchema>;
+
 // ── Helper: format Zod errors into user-friendly message ──
 export function formatZodError(error: z.ZodError<unknown>): string {
   return error.issues.map((issue) => issue.message).join(", ");
